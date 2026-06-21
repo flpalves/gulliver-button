@@ -1,0 +1,8 @@
+﻿Coloque aqui as imagens dos jogadores do time.
+
+Nomes esperados: 1.png a 11.png
+  1.png  = goleiro
+  2.png a 11.png = jogadores de linha
+
+Tamanho recomendado: 256x256 px (quadrado)
+As imagens sao aplicadas como figurinhas circulares no topo do botao 3D.

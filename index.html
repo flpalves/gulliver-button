@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Futebol de Botão 3D</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="hud">
+  <div id="hud-score">
+    <div class="tbadge" style="background:#FFD700"></div>
+    <span id="sy">0</span>
+    <span style="color:#fff;opacity:.5">×</span>
+    <span id="sb">0</span>
+    <div class="tbadge" style="background:#87CEEB"></div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-lbl">Tempo</div>
+    <div class="hud-val" id="timer-val">1T 05:00</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-lbl">Posse</div>
+    <div class="hud-val" id="poss-val">🟡 Amarelo</div>
+  </div>
+  <div class="hud-block">
+    <div class="hud-lbl">Toques</div>
+    <div class="hud-val" id="touch-val">0 / 4</div>
+  </div>
+</div>
+
+<div id="canvas-wrap"><canvas id="canvas"></canvas></div>
+<div id="toast-container"></div>
+<div id="gflash"></div>
+<div id="cam-btns">
+  <button id="cam-overview-btn">📷 Vista de cima</button>
+  <button id="cam-goal-left-btn">🥅 Gol amarelo</button>
+  <button id="cam-goal-right-btn">🥅 Gol azul</button>
+</div>
+<div id="zoom-btns">
+  <button id="zoom-in-btn" title="Zoom in (scroll ↑)">+</button>
+  <button id="zoom-out-btn" title="Zoom out (scroll ↓)">−</button>
+  <button id="reset-view-btn" title="Resetar câmera">⌂</button>
+</div>
+
+<div id="menu-overlay">
+  <div class="menu-box">
+    <div class="menu-title">FUTEBOL DE BOTÃO 3D</div>
+    <div class="menu-sub">Escolha as configurações e jogue</div>
+
+    <div class="menu-section">
+      <div class="menu-section-label">Modo de Jogo</div>
+      <div class="menu-grid-3">
+        <div class="menu-card selected" data-group="mode" data-value="standard" onclick="window.menuSelect(this)">
+          <div class="menu-card-icon">⚽</div>
+          <div class="menu-card-name">Futebol de Botão</div>
+          <div class="menu-card-desc">Campo completo · 11 jogadores</div>
+        </div>
+        <div class="menu-card" data-group="mode" data-value="society" onclick="window.menuSelect(this)">
+          <div class="menu-card-icon">🏟️</div>
+          <div class="menu-card-name">Society Fut7</div>
+          <div class="menu-card-desc">Campo reduzido · 7 jogadores</div>
+        </div>
+        <div class="menu-card" data-group="mode" data-value="showbol" onclick="window.menuSelect(this)">
+          <div class="menu-card-icon">🏐</div>
+          <div class="menu-card-name">Showbol</div>
+          <div class="menu-card-desc">Campo Fut7 com paredes · 5+1</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="menu-cols">
+      <div class="menu-section">
+        <div class="menu-section-label">Time 1 — Esquerda</div>
+        <div class="menu-grid-teams" id="team1-grid"></div>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-label">Time 2 — Direita</div>
+        <div class="menu-grid-teams" id="team2-grid"></div>
+      </div>
+    </div>
+
+    <div class="menu-cols">
+      <div class="menu-section">
+        <div class="menu-section-label">Bola</div>
+        <div class="menu-grid-2">
+          <div class="menu-card selected" data-group="ball" data-value="sphere" onclick="window.menuSelect(this)">
+            <div class="menu-card-icon">⚽</div>
+            <div class="menu-card-name">Bola</div>
+            <div class="menu-card-desc">Esfera clássica</div>
+          </div>
+          <div class="menu-card" data-group="ball" data-value="cube" onclick="window.menuSelect(this)">
+            <div class="menu-card-icon">🎲</div>
+            <div class="menu-card-name">Dadinho</div>
+            <div class="menu-card-desc">Comportamento único</div>
+          </div>
+        </div>
+      </div>
+      <div class="menu-section">
+        <div class="menu-section-label">Regras</div>
+        <div class="menu-grid-2">
+          <div class="menu-card selected" data-group="rule" data-value="4-toques" onclick="window.menuSelect(this)">
+            <div class="menu-card-icon">4️⃣</div>
+            <div class="menu-card-name">4 Toques</div>
+            <div class="menu-card-desc">4 toques por jogada</div>
+          </div>
+          <div class="menu-card" data-group="rule" data-value="12-toques" onclick="window.menuSelect(this)">
+            <div class="menu-card-icon">🔢</div>
+            <div class="menu-card-name">12 Toques</div>
+            <div class="menu-card-desc">12 toques · max 3 por jogador</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="menu-section">
+      <div class="menu-section-label">Tempo por Tempo</div>
+      <div class="menu-grid-3">
+        <div class="menu-card selected" data-group="time" data-value="5" onclick="window.menuSelect(this)">
+          <div class="menu-card-icon">⏱</div>
+          <div class="menu-card-name">5 minutos</div>
+          <div class="menu-card-desc">Partida rápida</div>
+        </div>
+        <div class="menu-card" data-group="time" data-value="7" onclick="window.menuSelect(this)">
+          <div class="menu-card-icon">⏱</div>
+          <div class="menu-card-name">7 minutos</div>
+          <div class="menu-card-desc">Partida padrão</div>
+        </div>
+        <div class="menu-card" data-group="time" data-value="10" onclick="window.menuSelect(this)">
+          <div class="menu-card-icon">⏱</div>
+          <div class="menu-card-name">10 minutos</div>
+          <div class="menu-card-desc">Partida longa</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="menu-start-btn" onclick="window.startGame()">⚽ JOGAR</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="obox">
+    <div class="otitle" id="otitle">INTERVALO</div>
+    <div class="osub" id="osub">Placar parcial</div>
+    <div class="oscr">
+      <span class="ty" id="osy">0</span>
+      <span style="color:#fff"> × </span>
+      <span class="tb" id="osb">0</span>
+    </div>
+    <button class="obtn" id="obtn">Continuar</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+  // Menu state — defaults pre-selected so JOGAR works immediately
+  window.selectedMode = 'standard';
+  window.selectedBall = 'sphere';
+  window.selectedRule = '4-toques';
+  window.selectedTime = 5;
+  window.gameInitialized = false;
+  window.gameModule = null;
+
+  window.selectedTeam1 = 'flamengo';
+  window.selectedTeam2 = 'palmeiras';
+
+  window.menuSelectTeam = function(card, slot) {
+    var value = card.dataset.value;
+    var other = slot === 1 ? 2 : 1;
+    var otherCurrent = slot === 1 ? window.selectedTeam2 : window.selectedTeam1;
+    // Swap if same team chosen for both slots
+    if (value === otherCurrent) {
+      var prev = slot === 1 ? window.selectedTeam1 : window.selectedTeam2;
+      document.querySelectorAll('.menu-card[data-group="team' + other + '"]').forEach(function(c) {
+        c.classList.toggle('selected', c.dataset.value === prev);
+      });
+      if (other === 1) window.selectedTeam1 = prev;
+      else window.selectedTeam2 = prev;
+    }
+    document.querySelectorAll('.menu-card[data-group="team' + slot + '"]').forEach(function(c) {
+      c.classList.remove('selected');
+    });
+    card.classList.add('selected');
+    if (slot === 1) window.selectedTeam1 = value;
+    else window.selectedTeam2 = value;
+  };
+
+  window.menuSelect = function(card) {
+    const group = card.dataset.group;
+    document.querySelectorAll('.menu-card[data-group="' + group + '"]').forEach(function(c) {
+      c.classList.remove('selected');
+    });
+    card.classList.add('selected');
+    if (group === 'mode') window.selectedMode = card.dataset.value;
+    if (group === 'ball') window.selectedBall = card.dataset.value;
+    if (group === 'rule') window.selectedRule = card.dataset.value;
+    if (group === 'time') window.selectedTime = parseInt(card.dataset.value);
+  };
+
+  window.startGame = function() {
+    document.getElementById('menu-overlay').classList.add('hidden');
+    if (window.gameModule && window.gameModule.initGame) {
+      var ruleMode = window.selectedRule === '12-toques'
+        ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+        : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+      var m = window.selectedMode;
+      var gameMode = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+                   : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+                   : window.gameModule.GAME_MODES.STANDARD;
+
+      var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+      var teamConfig = (t1 && t2) ? { left: t1, right: t2 } : null;
+
+      window.gameModule.initGame(ruleMode, window.selectedBall, gameMode, window.selectedTime * 60, teamConfig);
+      window.gameInitialized = true;
+
+      // Update HUD colours and labels
+      if (t1 && t2) {
+        var badges = document.querySelectorAll('.tbadge');
+        badges[0].style.background = t1.css;
+        badges[1].style.background = t2.css;
+        document.getElementById('sy').style.color = t1.css;
+        document.getElementById('sb').style.color = t2.css;
+        document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + t1.name;
+        document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
+      }
+    }
+  };
+</script>
+<script type="module">
+  import { initGame, RULE_MODES, GAME_MODES } from '/js/main.js';
+  import { TEAMS } from '/js/teams.js';
+
+  window.gameModule = { initGame, RULE_MODES, GAME_MODES };
+  window.TEAMS = TEAMS;
+
+  // Render team cards into both grids
+  function renderTeamGrid(gridId, group, defaultId) {
+    var grid = document.getElementById(gridId);
+    TEAMS.forEach(function(team) {
+      var card = document.createElement('div');
+      card.className = 'menu-card' + (team.id === defaultId ? ' selected' : '');
+      card.dataset.group = group;
+      card.dataset.value = team.id;
+      card.onclick = function() { window.menuSelectTeam(card, group === 'team1' ? 1 : 2); };
+      card.innerHTML =
+        '<div class="team-badge" style="background:' + team.css + ';border-color:' + team.css + '"></div>' +
+        '<div class="menu-card-name">' + team.name + '</div>';
+      grid.appendChild(card);
+    });
+  }
+
+  renderTeamGrid('team1-grid', 'team1', window.selectedTeam1);
+  renderTeamGrid('team2-grid', 'team2', window.selectedTeam2);
+</script>
+</body>
+</html>
