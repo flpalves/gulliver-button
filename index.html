@@ -670,7 +670,8 @@
 
   // Both players ready - start the game
   window.addEventListener('multiplayer:bothPlayersReady', (e) => {
-    console.log('[UI] 🚀 Both players ready event received');
+    console.log('[UI] 🚀 Both players ready event received:', e.detail);
+    console.log('[UI] Calling startGameNow()');
     window.startGameNow();
   });
 

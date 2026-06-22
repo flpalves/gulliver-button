@@ -185,32 +185,49 @@ io.on('connection', (socket) => {
 
   // ─── PLAYER READY ───
   socket.on('player_ready', (payload) => {
+    console.log(`\n[PLAYER_READY] 📤 ${socket.id} emitted player_ready`);
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
-    const room = rooms.get(roomCode);
 
-    if (!roomCode || !room) {
-      console.log(`\n[PLAYER_READY] ❌ Socket ${socket.id} not in any room!`);
+    if (!roomCode) {
+      console.log(`[PLAYER_READY] ❌ Socket ${socket.id} not in any room!`);
+      return;
+    }
+
+    const room = rooms.get(roomCode);
+    if (!room) {
+      console.log(`[PLAYER_READY] ❌ Room ${roomCode} not found!`);
       return;
     }
 
     const player = socket.id === room.yellowSocket ? '🟡 Yellow' : '🔵 Blue';
-    console.log(`\n[PLAYER_READY] 🎮 ${player} (${socket.id}) is ready`);
+    console.log(`[PLAYER_READY] 🎮 ${player} is ready`);
+    console.log(`[PLAYER_READY] Room: ${roomCode}`);
+    console.log(`[PLAYER_READY] Yellow socket: ${room.yellowSocket}`);
+    console.log(`[PLAYER_READY] Blue socket: ${room.blueSocket}`);
 
     // Mark this player as ready
     if (socket.id === room.yellowSocket) {
       room.yellowReady = true;
-    } else {
+      console.log(`[PLAYER_READY] Set yellowReady = true`);
+    } else if (socket.id === room.blueSocket) {
       room.blueReady = true;
+      console.log(`[PLAYER_READY] Set blueReady = true`);
+    } else {
+      console.log(`[PLAYER_READY] ⚠️ Socket ${socket.id} is neither yellow nor blue!`);
+      return;
     }
 
     console.log(`[PLAYER_READY] Status: Yellow=${room.yellowReady ? '✅' : '⏳'} | Blue=${room.blueReady ? '✅' : '⏳'}`);
 
     // If both players are ready, emit start_game
     if (room.yellowReady && room.blueReady) {
-      console.log(`[PLAYER_READY] 🚀 Both players ready! Starting game...`);
+      console.log(`[PLAYER_READY] 🚀 BOTH READY! Emitting both_players_ready to room ${roomCode}`);
       io.to(roomCode).emit('both_players_ready', {
         gameConfig: room.gameConfig
       });
+      console.log(`[PLAYER_READY] ✅ both_players_ready event sent`);
+    } else {
+      console.log(`[PLAYER_READY] ⏳ Waiting for second player...`);
     }
   });
 
