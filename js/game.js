@@ -752,8 +752,7 @@ export class Game {
       piece.physBody.velocity.z += payload.impulse.z;
     }
 
-    // Now switch to their turn
-    this.multiplayer.setTurn(false);
+    // Turn will change when physics_settled is received
   }
 
   _onPhysicsSettled(payload) {
