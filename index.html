@@ -285,17 +285,16 @@
     else            window.team2Index = idx;
     window.updateTeamDisplay(slot);
 
-    // Emit team change if in multiplayer and is room creator
-    console.log(`[UI] Checking conditions to emit:`, {
+    // Emit team change to other player
+    console.log(`[UI] Checking conditions to emit team_changed:`, {
       isOnline: window.currentGameMode === 'online',
       multiplayerExists: !!multiplayer,
       isActive: multiplayer?.isActive,
-      isCreator: multiplayer?.isRoomCreator,
       myTeam: multiplayer?.myTeam,
       roomCode: multiplayer?.roomCode
     });
 
-    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
+    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive) {
       console.log(`[UI] ✅ EMITTING team change: team1=${window.selectedTeam1}, team2=${window.selectedTeam2}`);
       multiplayer.emitTeamChanged(window.selectedTeam1, window.selectedTeam2);
     } else {
