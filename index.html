@@ -401,9 +401,11 @@
 <script type="module">
   import { initGame, initGameMultiplayer, RULE_MODES, GAME_MODES } from '/js/main.js';
   import { TEAMS } from '/js/teams.js';
+  import { multiplayer } from '/js/multiplayer.js';
 
   window.gameModule = { initGame, initGameMultiplayer, RULE_MODES, GAME_MODES };
   window.TEAMS = TEAMS;
+  window.multiplayer = multiplayer;
 
   window.team1Index = TEAMS.findIndex(function(t) { return t.id === window.selectedTeam1; });
   window.team2Index = TEAMS.findIndex(function(t) { return t.id === window.selectedTeam2; });
@@ -416,7 +418,7 @@
 
 <!-- Lobby UI Management -->
 <script type="module">
-  import { multiplayer } from '/js/multiplayer.js';
+  // multiplayer is already imported and exposed to window in the previous script tag
 
   const MODE_SELECT = document.getElementById('mode-select-overlay');
   const LOBBY = document.getElementById('lobby-overlay');
