@@ -258,6 +258,7 @@
   };
 
   window.cycleTeam = function(slot, dir) {
+    console.log(`[UI] cycleTeam called: slot=${slot}, dir=${dir}`);
     if (!window.TEAMS) return;
     var n     = window.TEAMS.length;
     var other = slot === 1 ? window.team2Index : window.team1Index;
@@ -273,12 +274,23 @@
 
     // Emit team change if in multiplayer and is room creator
     if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
+      console.log(`[UI] Emitting team change: team1=${window.selectedTeam1}, team2=${window.selectedTeam2}`);
       multiplayer.emitTeamChanged(window.selectedTeam1, window.selectedTeam2);
+    } else {
+      console.log(`[UI] Not emitting team change:`, {
+        isOnline: window.currentGameMode === 'online',
+        multiplayerExists: !!multiplayer,
+        isActive: multiplayer?.isActive,
+        isCreator: multiplayer?.isRoomCreator
+      });
     }
   };
 
   window.stabSelect = function(btn) {
     var group = btn.dataset.group;
+    var value = btn.dataset.value;
+    console.log(`[UI] stabSelect called: group=${group}, value=${value}`);
+
     document.querySelectorAll('.stab[data-group="' + group + '"]').forEach(function(b) {
       b.classList.remove('selected');
     });
@@ -292,6 +304,7 @@
     if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
       var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
       var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+      console.log(`[UI] Emitting settings change:`, { mode: window.selectedMode, ball: window.selectedBall, rule: window.selectedRule, time: window.selectedTime });
       multiplayer.emitSettingsChanged({
         mode: window.selectedMode,
         ball: window.selectedBall,
@@ -299,6 +312,13 @@
         time: window.selectedTime,
         team1: t1,
         team2: t2
+      });
+    } else {
+      console.log(`[UI] Not emitting settings change:`, {
+        isOnline: window.currentGameMode === 'online',
+        multiplayerExists: !!multiplayer,
+        isActive: multiplayer?.isActive,
+        isCreator: multiplayer?.isRoomCreator
       });
     }
   };
@@ -521,23 +541,28 @@
 
   // Remote team changed
   window.addEventListener('multiplayer:teamChanged', (e) => {
+    console.log('[UI] 🔔 Received multiplayer:teamChanged event:', e.detail);
     const { team1, team2 } = e.detail;
     window.selectedTeam1 = team1;
     window.selectedTeam2 = team2;
     window.team1Index = window.TEAMS.findIndex(t => t.id === team1);
     window.team2Index = window.TEAMS.findIndex(t => t.id === team2);
+    console.log('[UI] Updating team displays:', { team1Index: window.team1Index, team2Index: window.team2Index });
     window.updateTeamDisplay(1);
     window.updateTeamDisplay(2);
   });
 
   // Remote settings changed
   window.addEventListener('multiplayer:settingsChanged', (e) => {
+    console.log('[UI] 🔔 Received multiplayer:settingsChanged event:', e.detail);
     const { gameConfig } = e.detail;
     // Update local settings to match remote changes
     window.selectedMode = gameConfig.mode;
     window.selectedBall = gameConfig.ball;
     window.selectedRule = gameConfig.rule;
     window.selectedTime = gameConfig.time;
+
+    console.log('[UI] Updated settings:', { mode: window.selectedMode, ball: window.selectedBall, rule: window.selectedRule, time: window.selectedTime });
 
     // Update UI buttons
     document.querySelectorAll('.stab[data-group="mode"]').forEach(b => {

@@ -122,25 +122,35 @@ io.on('connection', (socket) => {
 
   // ─── TEAM CHANGED (relay) ───
   socket.on('team_changed', (payload) => {
+    console.log(`[TEAM_CHANGED] ${socket.id} emitted team_changed:`, payload);
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
     if (roomCode) {
+      console.log(`[TEAM_CHANGED] Relaying to room ${roomCode}`);
       socket.to(roomCode).emit('team_changed', payload);
-      console.log(`[TEAM] ${roomCode} - team changed`);
+      console.log(`[TEAM] ${roomCode} - team changed to ${payload.team1} vs ${payload.team2}`);
+    } else {
+      console.log(`[TEAM_CHANGED] ${socket.id} not in any room!`);
     }
   });
 
   // ─── SETTINGS CHANGED (relay + validation) ───
   socket.on('settings_changed', (payload) => {
+    console.log(`[SETTINGS_CHANGED] ${socket.id} emitted settings_changed:`, payload);
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
-    if (!roomCode) return;
+    if (!roomCode) {
+      console.log(`[SETTINGS_CHANGED] ${socket.id} not in any room!`);
+      return;
+    }
 
     const room = rooms.get(roomCode);
     // Only room creator can change settings
     if (socket.id === room.roomCreator) {
+      console.log(`[SETTINGS_CHANGED] ${socket.id} is room creator, relaying to ${roomCode}`);
       room.gameConfig = payload.gameConfig;
       socket.to(roomCode).emit('settings_changed', payload);
       console.log(`[SETTINGS] ${roomCode} - updated`);
     } else {
+      console.log(`[SETTINGS_CHANGED] ${socket.id} is NOT room creator (creator: ${room.roomCreator})`);
       socket.emit('settings_error', { message: 'Only room creator can change settings' });
     }
   });

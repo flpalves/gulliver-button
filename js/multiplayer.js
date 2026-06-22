@@ -94,18 +94,22 @@ export class MultiplayerManager {
         });
 
         this.socket.on('team_changed', (payload) => {
-          console.log('[Multiplayer] Opponent team changed:', payload);
+          console.log('[Multiplayer] 🔔 RECEIVED team_changed:', payload);
           if (this.onRemoteTeamChanged) {
+            console.log('[Multiplayer] Calling onRemoteTeamChanged callback');
             this.onRemoteTeamChanged(payload);
           }
+          console.log('[Multiplayer] Dispatching multiplayer:teamChanged event');
           this._dispatch('teamChanged', payload);
         });
 
         this.socket.on('settings_changed', (payload) => {
-          console.log('[Multiplayer] Settings changed:', payload);
+          console.log('[Multiplayer] 🔔 RECEIVED settings_changed:', payload);
           if (this.onRemoteSettingsChanged) {
+            console.log('[Multiplayer] Calling onRemoteSettingsChanged callback');
             this.onRemoteSettingsChanged(payload);
           }
+          console.log('[Multiplayer] Dispatching multiplayer:settingsChanged event');
           this._dispatch('settingsChanged', payload);
         });
 
@@ -173,7 +177,11 @@ export class MultiplayerManager {
   }
 
   emitTeamChanged(team1, team2) {
-    if (!this.socket || !this.isActive) return;
+    if (!this.socket || !this.isActive) {
+      console.warn('[Multiplayer] Cannot emit team_changed: socket not ready', { active: this.isActive, socketExists: !!this.socket });
+      return;
+    }
+    console.log('[Multiplayer] Emitting team_changed:', { team1, team2 });
     this.socket.emit('team_changed', {
       team1,
       team2,
@@ -182,7 +190,11 @@ export class MultiplayerManager {
   }
 
   emitSettingsChanged(gameConfig) {
-    if (!this.socket || !this.isActive) return;
+    if (!this.socket || !this.isActive) {
+      console.warn('[Multiplayer] Cannot emit settings_changed: socket not ready', { active: this.isActive, socketExists: !!this.socket });
+      return;
+    }
+    console.log('[Multiplayer] Emitting settings_changed:', gameConfig);
     this.socket.emit('settings_changed', {
       gameConfig,
       timestamp: Date.now()
