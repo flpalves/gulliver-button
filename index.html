@@ -43,7 +43,7 @@
   <button id="reset-view-btn" title="Resetar câmera">⌂</button>
 </div>
 
-<!-- ── Multiplayer screens ── -->
+<!-- ── Mode selection screen ── -->
 <div id="mode-select-overlay" class="menu-overlay-active">
   <div class="menu-box" style="max-width: 400px;">
     <div class="menu-header">
@@ -51,8 +51,8 @@
     </div>
     <div style="padding: 30px 20px; text-align: center;">
       <div style="margin-bottom: 20px; color: #fff; font-size: 14px;">Escolha o modo de jogo:</div>
-      <button class="menu-start-btn" id="local-play-btn" style="margin-bottom: 15px;">🎮 Jogar Local</button>
-      <button class="menu-start-btn" id="online-play-btn">🌐 Jogar Online</button>
+      <button class="menu-start-btn" id="local-mode-btn" style="margin-bottom: 15px;">🎮 Jogar Local</button>
+      <button class="menu-start-btn" id="online-mode-btn">🌐 Jogar Online</button>
     </div>
   </div>
 </div>
@@ -120,7 +120,7 @@
 </div>
 
 <!-- ── Pre-game menu ── -->
-<div id="menu-overlay">
+<div id="menu-overlay" class="hidden">
   <div class="menu-box">
 
     <!-- Header -->
@@ -194,6 +194,7 @@
     </div>
 
     <button class="menu-start-btn" onclick="window.startGame()">⚽ JOGAR</button>
+    <button id="back-to-mode-select-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">← Voltar</button>
   </div>
 </div>
 
@@ -284,6 +285,17 @@
   };
 
   window.startGame = function() {
+    // Store game mode for later use
+    window.currentGameMode = window.currentGameMode || 'local';
+
+    if (window.currentGameMode === 'online') {
+      // Online mode: show lobby instead
+      document.getElementById('menu-overlay').classList.add('hidden');
+      document.getElementById('lobby-overlay').classList.remove('hidden');
+      return;
+    }
+
+    // Local mode: start game directly
     document.getElementById('menu-overlay').classList.add('hidden');
     if (window.gameModule && window.gameModule.initGame) {
       var ruleMode = window.selectedRule === '12-toques'
@@ -354,14 +366,21 @@
     overlay.classList.remove('hidden');
   }
 
-  // Local play
-  document.getElementById('local-play-btn').addEventListener('click', () => {
+  // Mode selection
+  document.getElementById('local-mode-btn').addEventListener('click', () => {
+    window.currentGameMode = 'local';
     show(MENU);
   });
 
-  // Online play
-  document.getElementById('online-play-btn').addEventListener('click', () => {
-    show(LOBBY);
+  document.getElementById('online-mode-btn').addEventListener('click', () => {
+    window.currentGameMode = 'online';
+    show(MENU);
+  });
+
+  // Back to mode select
+  document.getElementById('back-to-mode-select-btn').addEventListener('click', () => {
+    window.currentGameMode = null;
+    show(MODE_SELECT);
   });
 
   // Create room
@@ -371,11 +390,16 @@
     try {
       await multiplayer.connect();
 
+      const t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      const t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+
       const gameConfig = {
         mode: window.selectedMode,
         ball: window.selectedBall,
         rule: window.selectedRule,
-        time: window.selectedTime
+        time: window.selectedTime,
+        team1: t1,
+        team2: t2
       };
 
       multiplayer.createRoom(gameConfig);
@@ -398,7 +422,7 @@
     const { gameConfig } = e.detail;
     document.getElementById('menu-overlay').classList.add('hidden');
 
-    if (window.gameModule && window.gameModule.initGame) {
+    if (window.gameModule && window.gameModule.initGameMultiplayer) {
       const ruleMode = gameConfig.rule === '12-toques'
         ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
         : window.gameModule.RULE_MODES.FOUR_TOUCHES;
@@ -409,6 +433,17 @@
 
       window.gameModule.initGameMultiplayer(ruleMode, gameConfig.ball, gm, gameConfig.time * 60, multiplayer);
       window.gameInitialized = true;
+
+      // Apply team colors
+      if (gameConfig.team1 && gameConfig.team2) {
+        const badges = document.querySelectorAll('.tbadge');
+        badges[0].style.background = gameConfig.team1.css;
+        badges[1].style.background = gameConfig.team2.css;
+        document.getElementById('sy').style.color = gameConfig.team1.css;
+        document.getElementById('sb').style.color = gameConfig.team2.css;
+        document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + gameConfig.team1.name;
+        document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + gameConfig.team2.name;
+      }
     }
   });
 
