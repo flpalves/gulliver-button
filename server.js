@@ -23,6 +23,8 @@ app.use(express.static(__dirname));
 
 // Room management
 const rooms = new Map();
+const DISCONNECT_WAIT_TIME = 30000; // 30 seconds to wait for reconnection
+const DISCONNECT_CHECK_INTERVAL = 5000; // Check every 5 seconds
 
 // Helper: Create initial game state based on rule mode
 function createGameState(ruleMode) {
@@ -54,6 +56,31 @@ function generateRoomCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+// Track disconnected sockets to allow reconnection
+function _markPlayerDisconnected(room, team) {
+  if (team === 'yellow') {
+    room.yellowDisconnectTime = Date.now();
+    room.yellowSocketPending = room.yellowSocket; // Keep reference for reconnection
+  } else {
+    room.blueDisconnectTime = Date.now();
+    room.blueSocketPending = room.blueSocket; // Keep reference for reconnection
+  }
+  console.log(`[DISCONNECT] ${team} marked as disconnected, waiting for reconnection...`);
+}
+
+// Check if disconnected player can reconnect
+function _isPlayerDisconnected(room, team) {
+  if (team === 'yellow') {
+    if (!room.yellowDisconnectTime) return false;
+    const elapsed = Date.now() - room.yellowDisconnectTime;
+    return elapsed < DISCONNECT_WAIT_TIME;
+  } else {
+    if (!room.blueDisconnectTime) return false;
+    const elapsed = Date.now() - room.blueDisconnectTime;
+    return elapsed < DISCONNECT_WAIT_TIME;
+  }
 }
 
 // Broadcast game state to both players with turn info and positions
@@ -143,6 +170,64 @@ io.on('connection', (socket) => {
       gameConfig: room.gameConfig
     });
     console.log(`[ROOM] ${roomCode} room_ready event sent to both players`);
+  });
+
+  // ─── REJOIN ROOM (after disconnection) ───
+  socket.on('rejoin_room', (roomCode) => {
+    const room = rooms.get(roomCode);
+
+    if (!room) {
+      console.log(`[REJOIN] ❌ ${socket.id} tried to rejoin non-existent room ${roomCode}`);
+      socket.emit('rejoin_error', { message: 'Room no longer exists' });
+      return;
+    }
+
+    // Determine which team this socket belongs to based on pending reference
+    let playerTeam = null;
+    if (room.yellowSocketPending === room.yellowSocket && _isPlayerDisconnected(room, 'yellow')) {
+      playerTeam = 'yellow';
+    } else if (room.blueSocketPending === room.blueSocket && _isPlayerDisconnected(room, 'blue')) {
+      playerTeam = 'blue';
+    }
+
+    if (!playerTeam) {
+      console.log(`[REJOIN] ❌ ${socket.id} cannot rejoin ${roomCode} (not in reconnection window)`);
+      socket.emit('rejoin_error', { message: 'Reconnection window expired' });
+      return;
+    }
+
+    // Update socket reference
+    if (playerTeam === 'yellow') {
+      room.yellowSocket = socket.id;
+      room.yellowDisconnectTime = null;
+      if (room.yellowDisconnectTimer) {
+        clearTimeout(room.yellowDisconnectTimer);
+      }
+      console.log(`[REJOIN] ✅ 🟡 Yellow reconnected to ${roomCode}`);
+    } else {
+      room.blueSocket = socket.id;
+      room.blueDisconnectTime = null;
+      if (room.blueDisconnectTimer) {
+        clearTimeout(room.blueDisconnectTimer);
+      }
+      console.log(`[REJOIN] ✅ 🔵 Blue reconnected to ${roomCode}`);
+    }
+
+    // Join the room
+    socket.join(roomCode);
+
+    // Notify both players of successful reconnection
+    io.to(roomCode).emit('opponent_reconnected', {
+      team: playerTeam,
+      gameState: room.gameState
+    });
+    console.log(`[REJOIN] ${roomCode} - ${playerTeam} reconnection notified to opponent`);
+
+    // Send current game state to the reconnected player
+    socket.emit('game_state', {
+      gameState: room.gameState,
+      isMyTurn: room.gameState.possession === playerTeam && !room.gameState.locked
+    });
   });
 
   // ─── SHOT FIRED (server-controlled) ───
@@ -375,19 +460,57 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ─── DISCONNECT ───
+  // ─── DISCONNECT (with reconnection support) ───
   socket.on('disconnect', () => {
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
     if (roomCode) {
       const room = rooms.get(roomCode);
-      const player = socket.id === room.yellowSocket ? '🟡 Yellow' : '🔵 Blue';
-      console.log(`\n[DISCONNECT] ❌ ${player} (${socket.id}) from ${roomCode}`);
-      socket.to(roomCode).emit('opponent_disconnected');
-      console.log(`[DISCONNECT] Notified opponent`);
+      const isYellow = socket.id === room.yellowSocket;
+      const isBlue = socket.id === room.blueSocket;
+      const playerTeam = isYellow ? 'yellow' : isBlue ? 'blue' : null;
+      const playerEmoji = isYellow ? '🟡 Yellow' : '🔵 Blue';
 
-      // Clean up the room
-      rooms.delete(roomCode);
-      console.log(`[DISCONNECT] Room ${roomCode} deleted`);
+      if (playerTeam) {
+        console.log(`\n[DISCONNECT] ❌ ${playerEmoji} (${socket.id}) from ${roomCode}`);
+
+        // Mark player as disconnected (allow reconnection window)
+        _markPlayerDisconnected(room, playerTeam);
+
+        // Notify opponent of disconnection
+        socket.to(roomCode).emit('opponent_disconnected', {
+          team: playerTeam,
+          canReconnect: true,
+          waitSeconds: DISCONNECT_WAIT_TIME / 1000
+        });
+        console.log(`[DISCONNECT] Notified opponent - waiting ${DISCONNECT_WAIT_TIME / 1000}s for reconnection`);
+
+        // Schedule room cleanup if no reconnection within timeout
+        const cleanupTimer = setTimeout(() => {
+          if (_isPlayerDisconnected(room, playerTeam)) {
+            console.log(`[DISCONNECT] ⏱️ Timeout: ${playerEmoji} did not reconnect. Cleaning up room ${roomCode}`);
+
+            // Notify the other player that room will close
+            if (isYellow && room.blueSocket) {
+              io.to(room.blueSocket).emit('opponent_reconnect_timeout', { team: 'yellow' });
+            } else if (isBlue && room.yellowSocket) {
+              io.to(room.yellowSocket).emit('opponent_reconnect_timeout', { team: 'blue' });
+            }
+
+            // Delete the room
+            rooms.delete(roomCode);
+            console.log(`[DISCONNECT] Room ${roomCode} deleted after timeout`);
+          }
+        }, DISCONNECT_WAIT_TIME);
+
+        // Store timer reference for cleanup
+        if (isYellow) {
+          room.yellowDisconnectTimer = cleanupTimer;
+        } else if (isBlue) {
+          room.blueDisconnectTimer = cleanupTimer;
+        }
+      } else {
+        console.log(`\n[DISCONNECT] ❌ ${socket.id} disconnected (not assigned to any team)`);
+      }
     } else {
       console.log(`\n[DISCONNECT] ❌ ${socket.id} (not in any room)`);
     }

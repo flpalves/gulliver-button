@@ -34,6 +34,13 @@ export class MultiplayerManager {
 
         this.socket.on('connect', () => {
           console.log('[Multiplayer] Connected to server');
+
+          // If we have an active room, try to rejoin
+          if (this.roomCode && this.isActive) {
+            console.log('[Multiplayer] Attempting to rejoin room after reconnection...');
+            this.rejoinRoom();
+          }
+
           resolve();
         });
 
@@ -87,12 +94,24 @@ export class MultiplayerManager {
           }
         });
 
-        this.socket.on('opponent_disconnected', () => {
-          console.log('[Multiplayer] Opponent disconnected');
+        this.socket.on('opponent_disconnected', (data) => {
+          console.log('[Multiplayer] Opponent disconnected:', data);
           if (this.onOpponentDisconnected) {
-            this.onOpponentDisconnected();
+            this.onOpponentDisconnected(data);
           }
-          this._dispatch('opponentDisconnected', {});
+          this._dispatch('opponentDisconnected', data);
+        });
+
+        this.socket.on('opponent_reconnected', (data) => {
+          console.log('[Multiplayer] Opponent reconnected:', data);
+          // Reset game state on reconnection
+          this.serverGameState = data.gameState;
+          this._dispatch('opponentReconnected', data);
+        });
+
+        this.socket.on('opponent_reconnect_timeout', (data) => {
+          console.log('[Multiplayer] Opponent timeout - room closing');
+          this._dispatch('opponentReconnectTimeout', data);
         });
 
         this.socket.on('team_changed', (payload) => {
@@ -135,8 +154,20 @@ export class MultiplayerManager {
           this._dispatch('gameStateUpdated', data);
         });
 
-        this.socket.on('disconnect', () => {
-          console.log('[Multiplayer] Disconnected from server');
+        this.socket.on('disconnect', (reason) => {
+          console.log('[Multiplayer] Disconnected from server:', reason);
+
+          // If not intentional disconnection, try to reconnect
+          if (reason !== 'io client namespace disconnect' && this.roomCode && this.isActive) {
+            console.log('[Multiplayer] Unintentional disconnect - scheduling reconnection attempt');
+            // Try to reconnect after 2 seconds
+            setTimeout(() => {
+              if (this.socket && !this.socket.connected) {
+                console.log('[Multiplayer] Reconnecting to server...');
+                this.socket.connect();
+              }
+            }, 2000);
+          }
         });
       } catch (error) {
         reject(error);
@@ -233,6 +264,15 @@ export class MultiplayerManager {
   }
 
   // isMyTurn is now controlled by the server via game_state events
+
+  rejoinRoom() {
+    if (!this.socket || !this.roomCode) {
+      console.warn('[Multiplayer] Cannot rejoin: socket not ready or no roomCode');
+      return;
+    }
+    console.log('[Multiplayer] Attempting to rejoin room:', this.roomCode);
+    this.socket.emit('rejoin_room', this.roomCode);
+  }
 
   disconnect() {
     if (this.socket) {

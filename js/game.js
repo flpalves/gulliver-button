@@ -111,6 +111,7 @@ export class Game {
       this.multiplayer.onRemoteShotFired = (payload) => this._onRemoteShotFired(payload);
       this.multiplayer.onPhysicsSettled = (payload) => this._onPhysicsSettled(payload);
       this.multiplayer.onGameStateUpdated = (data) => this._onGameStateUpdated(data);
+      this.multiplayer.onOpponentDisconnected = (data) => this._onOpponentDisconnected(data);
     }
 
     this._updateHUD();
@@ -783,6 +784,20 @@ export class Game {
 
     // Update HUD to reflect server state
     this._updateHUD();
+  }
+
+  _onOpponentDisconnected(data) {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    console.log('[Game] Opponent disconnected:', data);
+    this.paused = true;
+    const waitSeconds = Math.ceil(data.waitSeconds || 30);
+    this._setStatus(`⚠️ ${data.team === 'yellow' ? '🟡 Amarelo' : '🔵 Azul'} desconectou. Aguardando reconexão... (${waitSeconds}s)`);
+
+    // Dispatch event for UI to show disconnection overlay
+    window.dispatchEvent(new CustomEvent('multiplayer:opponentDisconnected', {
+      detail: data
+    }));
   }
 }
 
