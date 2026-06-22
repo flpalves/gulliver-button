@@ -21,7 +21,7 @@ const port = process.env.PORT || 3000;
 // Serve static files
 app.use(express.static(__dirname));
 
-// Room management: { code: { yellowSocket, blueSocket, gameConfig, roomCreator } }
+// Room management: { code: { yellowSocket, blueSocket, gameConfig, roomCreator, yellowReady, blueReady } }
 const rooms = new Map();
 
 // Generate random 4-letter room code
@@ -49,7 +49,9 @@ io.on('connection', (socket) => {
       yellowSocket: socket.id,
       blueSocket: null,
       gameConfig,
-      roomCreator: socket.id
+      roomCreator: socket.id,
+      yellowReady: false,
+      blueReady: false
     });
 
     socket.join(code);
@@ -74,6 +76,9 @@ io.on('connection', (socket) => {
     }
 
     room.blueSocket = socket.id;
+    // Reset ready flags when a new player joins
+    room.yellowReady = false;
+    room.blueReady = false;
     socket.join(roomCode);
 
     console.log(`[ROOM] ${roomCode} joined by ${socket.id} (blue) ✅`);
@@ -168,10 +173,44 @@ io.on('connection', (socket) => {
       console.log(`  Relaying to: ${receiver}`);
       socket.to(roomCode).emit('settings_changed', payload);
       console.log(`[SETTINGS_CHANGED] ✅ Event relayed`);
+      // Reset ready status when settings change
+      room.yellowReady = false;
+      room.blueReady = false;
     } else {
       console.log(`[SETTINGS_CHANGED] ❌ Not room creator (creator: ${room.roomCreator})`);
       socket.emit('settings_error', { message: 'Only room creator can change settings' });
       console.log(`[SETTINGS_CHANGED] ❌ Sent settings_error to client`);
+    }
+  });
+
+  // ─── PLAYER READY ───
+  socket.on('player_ready', (payload) => {
+    const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
+    const room = rooms.get(roomCode);
+
+    if (!roomCode || !room) {
+      console.log(`\n[PLAYER_READY] ❌ Socket ${socket.id} not in any room!`);
+      return;
+    }
+
+    const player = socket.id === room.yellowSocket ? '🟡 Yellow' : '🔵 Blue';
+    console.log(`\n[PLAYER_READY] 🎮 ${player} (${socket.id}) is ready`);
+
+    // Mark this player as ready
+    if (socket.id === room.yellowSocket) {
+      room.yellowReady = true;
+    } else {
+      room.blueReady = true;
+    }
+
+    console.log(`[PLAYER_READY] Status: Yellow=${room.yellowReady ? '✅' : '⏳'} | Blue=${room.blueReady ? '✅' : '⏳'}`);
+
+    // If both players are ready, emit start_game
+    if (room.yellowReady && room.blueReady) {
+      console.log(`[PLAYER_READY] 🚀 Both players ready! Starting game...`);
+      io.to(roomCode).emit('both_players_ready', {
+        gameConfig: room.gameConfig
+      });
     }
   });
 

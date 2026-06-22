@@ -349,35 +349,17 @@
     window.currentGameMode = window.currentGameMode || 'local';
 
     if (window.currentGameMode === 'online') {
-      // For multiplayer online, we're already in the menu after both players are ready
-      // Just start the game with current settings
-      if (window.gameModule && window.gameModule.initGameMultiplayer && typeof multiplayer !== 'undefined') {
-        document.getElementById('menu-overlay').classList.add('hidden');
+      // For multiplayer: emit player_ready and wait for both players
+      console.log('[UI] Multiplayer: Emitting player_ready');
+      multiplayer.emitPlayerReady();
 
-        var ruleMode = window.selectedRule === '12-toques'
-          ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
-          : window.gameModule.RULE_MODES.FOUR_TOUCHES;
-        var m = window.selectedMode;
-        var gm = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
-                   : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
-                   : window.gameModule.GAME_MODES.STANDARD;
+      // Show waiting overlay
+      var waitingOverlay = document.createElement('div');
+      waitingOverlay.id = 'waiting-both-players-overlay';
+      waitingOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+      waitingOverlay.innerHTML = '<div style="text-align: center;"><div style="font-size: 24px; color: #fff; margin-bottom: 20px;">⏳ Aguardando outro jogador...</div><div style="font-size: 14px; color: #aaa;">Você já é está pronto!</div></div>';
+      document.body.appendChild(waitingOverlay);
 
-        var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
-        var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
-
-        window.gameModule.initGameMultiplayer(ruleMode, window.selectedBall, gm, window.selectedTime * 60, multiplayer);
-        window.gameInitialized = true;
-
-        if (t1 && t2) {
-          var badges = document.querySelectorAll('.tbadge');
-          badges[0].style.background = t1.css;
-          badges[1].style.background = t2.css;
-          document.getElementById('sy').style.color = t1.css;
-          document.getElementById('sb').style.color = t2.css;
-          document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + t1.name;
-          document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
-        }
-      }
       return;
     }
 
@@ -397,6 +379,41 @@
       var teamConfig = (t1 && t2) ? { left: t1, right: t2 } : null;
 
       window.gameModule.initGame(ruleMode, window.selectedBall, gameMode, window.selectedTime * 60, teamConfig);
+      window.gameInitialized = true;
+
+      if (t1 && t2) {
+        var badges = document.querySelectorAll('.tbadge');
+        badges[0].style.background = t1.css;
+        badges[1].style.background = t2.css;
+        document.getElementById('sy').style.color = t1.css;
+        document.getElementById('sb').style.color = t2.css;
+        document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + t1.name;
+        document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
+      }
+    }
+  };
+
+  // Start the actual game when both players are ready
+  window.startGameNow = function() {
+    console.log('[UI] Starting game now!');
+    var waitingOverlay = document.getElementById('waiting-both-players-overlay');
+    if (waitingOverlay) waitingOverlay.remove();
+
+    document.getElementById('menu-overlay').classList.add('hidden');
+
+    if (window.gameModule && window.gameModule.initGameMultiplayer && typeof multiplayer !== 'undefined') {
+      var ruleMode = window.selectedRule === '12-toques'
+        ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+        : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+      var m = window.selectedMode;
+      var gm = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+                 : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+                 : window.gameModule.GAME_MODES.STANDARD;
+
+      var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+
+      window.gameModule.initGameMultiplayer(ruleMode, window.selectedBall, gm, window.selectedTime * 60, multiplayer);
       window.gameInitialized = true;
 
       if (t1 && t2) {
@@ -650,6 +667,12 @@
   // Settings error handling
   window.addEventListener('multiplayer:settingsError', (e) => {
     alert('Erro: ' + e.detail.message);
+  });
+
+  // Both players ready - start the game
+  window.addEventListener('multiplayer:bothPlayersReady', (e) => {
+    console.log('[UI] 🚀 Both players ready event received');
+    window.startGameNow();
   });
 
   // Copy code button

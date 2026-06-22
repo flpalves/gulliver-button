@@ -118,6 +118,11 @@ export class MultiplayerManager {
           this._dispatch('settingsError', data);
         });
 
+        this.socket.on('both_players_ready', (data) => {
+          console.log('[Multiplayer] 🚀 Both players ready! Game starting...');
+          this._dispatch('bothPlayersReady', data);
+        });
+
         this.socket.on('disconnect', () => {
           console.log('[Multiplayer] Disconnected from server');
         });
@@ -197,6 +202,18 @@ export class MultiplayerManager {
     console.log('[Multiplayer] Emitting settings_changed:', gameConfig);
     this.socket.emit('settings_changed', {
       gameConfig,
+      timestamp: Date.now()
+    });
+  }
+
+  emitPlayerReady() {
+    if (!this.socket || !this.isActive) {
+      console.warn('[Multiplayer] Cannot emit player_ready: socket not ready', { active: this.isActive, socketExists: !!this.socket });
+      return;
+    }
+    console.log('[Multiplayer] 🎮 Emitting player_ready');
+    this.socket.emit('player_ready', {
+      team: this.myTeam,
       timestamp: Date.now()
     });
   }
