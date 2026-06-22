@@ -273,16 +273,20 @@
     window.updateTeamDisplay(slot);
 
     // Emit team change if in multiplayer and is room creator
+    console.log(`[UI] Checking conditions to emit:`, {
+      isOnline: window.currentGameMode === 'online',
+      multiplayerExists: !!multiplayer,
+      isActive: multiplayer?.isActive,
+      isCreator: multiplayer?.isRoomCreator,
+      myTeam: multiplayer?.myTeam,
+      roomCode: multiplayer?.roomCode
+    });
+
     if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
-      console.log(`[UI] Emitting team change: team1=${window.selectedTeam1}, team2=${window.selectedTeam2}`);
+      console.log(`[UI] ✅ EMITTING team change: team1=${window.selectedTeam1}, team2=${window.selectedTeam2}`);
       multiplayer.emitTeamChanged(window.selectedTeam1, window.selectedTeam2);
     } else {
-      console.log(`[UI] Not emitting team change:`, {
-        isOnline: window.currentGameMode === 'online',
-        multiplayerExists: !!multiplayer,
-        isActive: multiplayer?.isActive,
-        isCreator: multiplayer?.isRoomCreator
-      });
+      console.log(`[UI] ❌ NOT emitting - conditions not met`);
     }
   };
 
@@ -301,10 +305,19 @@
     if (group === 'time') window.selectedTime = parseInt(btn.dataset.value);
 
     // Emit settings change if in multiplayer and is room creator
+    console.log(`[UI] Checking conditions to emit settings:`, {
+      isOnline: window.currentGameMode === 'online',
+      multiplayerExists: !!multiplayer,
+      isActive: multiplayer?.isActive,
+      isCreator: multiplayer?.isRoomCreator,
+      myTeam: multiplayer?.myTeam,
+      roomCode: multiplayer?.roomCode
+    });
+
     if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
       var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
       var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
-      console.log(`[UI] Emitting settings change:`, { mode: window.selectedMode, ball: window.selectedBall, rule: window.selectedRule, time: window.selectedTime });
+      console.log(`[UI] ✅ EMITTING settings change:`, { mode: window.selectedMode, ball: window.selectedBall, rule: window.selectedRule, time: window.selectedTime });
       multiplayer.emitSettingsChanged({
         mode: window.selectedMode,
         ball: window.selectedBall,
@@ -314,12 +327,7 @@
         team2: t2
       });
     } else {
-      console.log(`[UI] Not emitting settings change:`, {
-        isOnline: window.currentGameMode === 'online',
-        multiplayerExists: !!multiplayer,
-        isActive: multiplayer?.isActive,
-        isCreator: multiplayer?.isRoomCreator
-      });
+      console.log(`[UI] ❌ NOT emitting settings - conditions not met`);
     }
   };
 
@@ -485,10 +493,19 @@
   // Room ready - show menu for team/settings selection
   window.addEventListener('multiplayer:roomReady', (e) => {
     const { yellowSocketId, blueSocketId, gameConfig } = e.detail;
+    console.log(`[UI] 🎮 Room Ready Event received:`, {
+      yellowSocketId,
+      blueSocketId,
+      myTeam: multiplayer.myTeam,
+      isRoomCreator: multiplayer.isRoomCreator,
+      isActive: multiplayer.isActive,
+      currentGameMode: window.currentGameMode
+    });
     show(MENU);
 
     // Disable settings for blue player
     const isBluePlayer = multiplayer.myTeam === 'blue';
+    console.log(`[UI] Room Ready: isBluePlayer=${isBluePlayer}, isRoomCreator=${multiplayer.isRoomCreator}`);
     const settingsTabs = document.querySelectorAll('.setting-group');
     settingsTabs.forEach(group => {
       const buttons = group.querySelectorAll('.stab');
