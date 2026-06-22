@@ -130,5 +130,5 @@ def on_disconnect():
     print(f'[DISCONNECT] {request.sid}')
 
 if __name__ == '__main__':
-    print('🎮 Gulliver server listening on http://localhost:3000')
-    socketio.run(app, host='0.0.0.0', port=3000, debug=False)
+    print('[SERVER] Gulliver server listening on http://localhost:3000')
+    socketio.run(app, host='0.0.0.0', port=3000, debug=False, allow_unsafe_werkzeug=True)
