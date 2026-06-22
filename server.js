@@ -35,7 +35,8 @@ function generateRoomCode() {
 }
 
 io.on('connection', (socket) => {
-  console.log(`[CONNECT] ${socket.id}`);
+  console.log(`\n[CONNECT] ✅ ${socket.id}`);
+  console.log(`[CONNECT] Total sockets: ${io.engine.clientsCount}`);
 
   // ─── CREATE ROOM (Yellow player) ───
   socket.on('create_room', (gameConfig) => {
@@ -75,7 +76,8 @@ io.on('connection', (socket) => {
     room.blueSocket = socket.id;
     socket.join(roomCode);
 
-    console.log(`[ROOM] ${roomCode} joined by ${socket.id} (blue)`);
+    console.log(`[ROOM] ${roomCode} joined by ${socket.id} (blue) ✅`);
+    console.log(`[ROOM] ${roomCode} is now READY! Yellow: ${room.yellowSocket} | Blue: ${room.blueSocket}`);
 
     // Notify both players that the room is ready
     io.to(roomCode).emit('room_ready', {
@@ -83,6 +85,7 @@ io.on('connection', (socket) => {
       blueSocketId: room.blueSocket,
       gameConfig: room.gameConfig
     });
+    console.log(`[ROOM] ${roomCode} room_ready event sent to both players`);
   });
 
   // ─── SHOT FIRED (relay) ───
@@ -122,36 +125,53 @@ io.on('connection', (socket) => {
 
   // ─── TEAM CHANGED (relay) ───
   socket.on('team_changed', (payload) => {
-    console.log(`[TEAM_CHANGED] ${socket.id} emitted team_changed:`, payload);
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
+    console.log(`\n[TEAM_CHANGED] 📤 ${socket.id} emitted:`);
+    console.log(`  Team1: ${payload.team1} | Team2: ${payload.team2}`);
+
     if (roomCode) {
-      console.log(`[TEAM_CHANGED] Relaying to room ${roomCode}`);
+      const room = rooms.get(roomCode);
+      const sender = socket.id === room.yellowSocket ? '🟡 Yellow' : '🔵 Blue';
+      const receiver = socket.id === room.yellowSocket ? '🔵 Blue' : '🟡 Yellow';
+      console.log(`  Room: ${roomCode}`);
+      console.log(`  Sender: ${sender} (${socket.id})`);
+      console.log(`  Relaying to: ${receiver}`);
+
       socket.to(roomCode).emit('team_changed', payload);
-      console.log(`[TEAM] ${roomCode} - team changed to ${payload.team1} vs ${payload.team2}`);
+      console.log(`[TEAM_CHANGED] ✅ Event relayed`);
     } else {
-      console.log(`[TEAM_CHANGED] ${socket.id} not in any room!`);
+      console.log(`[TEAM_CHANGED] ❌ Socket ${socket.id} not in any room!`);
     }
   });
 
   // ─── SETTINGS CHANGED (relay + validation) ───
   socket.on('settings_changed', (payload) => {
-    console.log(`[SETTINGS_CHANGED] ${socket.id} emitted settings_changed:`, payload);
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
+    console.log(`\n[SETTINGS_CHANGED] 📤 ${socket.id} emitted:`);
+    console.log(`  Mode: ${payload.gameConfig.mode} | Ball: ${payload.gameConfig.ball}`);
+    console.log(`  Rule: ${payload.gameConfig.rule} | Time: ${payload.gameConfig.time}`);
+
     if (!roomCode) {
-      console.log(`[SETTINGS_CHANGED] ${socket.id} not in any room!`);
+      console.log(`[SETTINGS_CHANGED] ❌ Socket ${socket.id} not in any room!`);
       return;
     }
 
     const room = rooms.get(roomCode);
+    const sender = socket.id === room.roomCreator ? '✅ Creator' : '❌ Not Creator';
+    console.log(`  Room: ${roomCode}`);
+    console.log(`  Sender: ${sender} (${socket.id})`);
+
     // Only room creator can change settings
     if (socket.id === room.roomCreator) {
-      console.log(`[SETTINGS_CHANGED] ${socket.id} is room creator, relaying to ${roomCode}`);
       room.gameConfig = payload.gameConfig;
+      const receiver = socket.id === room.yellowSocket ? '🔵 Blue' : '🟡 Yellow';
+      console.log(`  Relaying to: ${receiver}`);
       socket.to(roomCode).emit('settings_changed', payload);
-      console.log(`[SETTINGS] ${roomCode} - updated`);
+      console.log(`[SETTINGS_CHANGED] ✅ Event relayed`);
     } else {
-      console.log(`[SETTINGS_CHANGED] ${socket.id} is NOT room creator (creator: ${room.roomCreator})`);
+      console.log(`[SETTINGS_CHANGED] ❌ Not room creator (creator: ${room.roomCreator})`);
       socket.emit('settings_error', { message: 'Only room creator can change settings' });
+      console.log(`[SETTINGS_CHANGED] ❌ Sent settings_error to client`);
     }
   });
 
@@ -160,13 +180,17 @@ io.on('connection', (socket) => {
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
     if (roomCode) {
       const room = rooms.get(roomCode);
+      const player = socket.id === room.yellowSocket ? '🟡 Yellow' : '🔵 Blue';
+      console.log(`\n[DISCONNECT] ❌ ${player} (${socket.id}) from ${roomCode}`);
       socket.to(roomCode).emit('opponent_disconnected');
-      console.log(`[DISCONNECT] ${socket.id} from ${roomCode}`);
+      console.log(`[DISCONNECT] Notified opponent`);
 
       // Clean up the room
       rooms.delete(roomCode);
+      console.log(`[DISCONNECT] Room ${roomCode} deleted`);
+    } else {
+      console.log(`\n[DISCONNECT] ❌ ${socket.id} (not in any room)`);
     }
-    console.log(`[DISCONNECT] ${socket.id}`);
   });
 });
 
