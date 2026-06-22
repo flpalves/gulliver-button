@@ -119,7 +119,7 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   // Determine my team from multiplayer
   const myTeam = multiplayer.myTeam; // 'yellow' or 'blue'
   const opponentTeam = myTeam === 'yellow' ? 'blue' : 'yellow';
-  const teamIds = { yellow: myTeam === 'yellow' ? 'my-team' : 'opponent', blue: myTeam === 'blue' ? 'my-team' : 'opponent' };
+  const teamIds = { yellow: 'yellow', blue: 'blue' };
 
   players = createTeams(gameMode, teamIds);
   players.forEach(p => physics.addPlayerBody(p));
