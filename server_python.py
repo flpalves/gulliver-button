@@ -4,13 +4,16 @@ Gulliver Multiplayer Server - Python version
 Flask + Python-SocketIO for local testing
 """
 
-from flask import Flask, render_template_string
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask import Flask, send_from_directory, request
+from flask_socketio import SocketIO, emit, join_room
 import random
 import string
 import os
 
-app = Flask(__name__)
+# Get the directory where this script is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(__name__, static_folder=BASE_DIR, static_url_path='')
 app.config['SECRET_KEY'] = 'gulliver-secret-dev'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -24,10 +27,12 @@ def generate_room_code():
 @app.route('/')
 def index():
     """Serve the game HTML"""
-    # Get the directory where this script is located
-    game_dir = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(game_dir, 'index.html'), 'r', encoding='utf-8') as f:
-        return f.read()
+    return send_from_directory(BASE_DIR, 'index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    """Serve static files (CSS, JS, etc)"""
+    return send_from_directory(BASE_DIR, filename)
 
 @socketio.on('create_room')
 def on_create_room(data):
