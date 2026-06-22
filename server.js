@@ -36,7 +36,8 @@ function createGameState(ruleMode) {
     shooterTouchCount: 0,
     locked: false,
     ballDead: false,
-    lastShooterTeam: null
+    lastShooterTeam: null,
+    bodyStates: null // Synchronized body positions from the active player
   };
 }
 
@@ -55,7 +56,7 @@ function generateRoomCode() {
   return code;
 }
 
-// Broadcast game state to both players with turn info
+// Broadcast game state to both players with turn info and positions
 function _broadcastGameState(io, roomCode, room) {
   const { yellowSocket, blueSocket, gameState } = room;
 
@@ -65,13 +66,19 @@ function _broadcastGameState(io, roomCode, room) {
 
   // Send to Yellow
   io.to(yellowSocket).emit('game_state', {
-    gameState,
+    gameState: {
+      ...gameState,
+      bodyStates: gameState.bodyStates
+    },
     isMyTurn: yellowTurn
   });
 
   // Send to Blue
   io.to(blueSocket).emit('game_state', {
-    gameState,
+    gameState: {
+      ...gameState,
+      bodyStates: gameState.bodyStates
+    },
     isMyTurn: blueTurn
   });
 
@@ -159,7 +166,12 @@ io.on('connection', (socket) => {
     gameState.locked = true;
     gameState.lastShooterTeam = shooterTeam;
 
-    // Relay shot to opponent
+    // Store body positions from the active player
+    if (payload.bodyStates) {
+      gameState.bodyStates = payload.bodyStates;
+    }
+
+    // Relay shot to opponent with positions
     socket.to(roomCode).emit('shot_fired', payload);
     console.log(`[SHOT] ${roomCode} - ${shooterTeam} fired shot`);
 
@@ -229,6 +241,11 @@ io.on('connection', (socket) => {
       gameState.shooterTouchCount = 0;
     }
 
+    // Store final body positions
+    if (payload.bodyStates) {
+      gameState.bodyStates = payload.bodyStates;
+    }
+
     // Unlock game - next player can shoot
     gameState.locked = false;
     gameState.lastTouchTeam = payload.lastTouchTeam;
@@ -237,7 +254,7 @@ io.on('connection', (socket) => {
     socket.to(roomCode).emit('physics_settled', payload);
     console.log(`[PHYSICS] ${roomCode} - Shot resolved. New possession: ${gameState.possession}`);
 
-    // Broadcast updated game state
+    // Broadcast updated game state with final positions
     _broadcastGameState(io, roomCode, room);
   });
 

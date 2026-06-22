@@ -771,6 +771,11 @@ export class Game {
     this.touches = gameState.touches;
     this.locked = gameState.locked;
 
+    // Sync body positions from server (for the player NOT currently controlling physics)
+    if (gameState.bodyStates && !data.isMyTurn) {
+      this.applyBodyStates(gameState.bodyStates);
+    }
+
     // Update HUD to reflect server state
     this._updateHUD();
   }
