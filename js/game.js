@@ -110,6 +110,7 @@ export class Game {
     if (this.multiplayer) {
       this.multiplayer.onRemoteShotFired = (payload) => this._onRemoteShotFired(payload);
       this.multiplayer.onPhysicsSettled = (payload) => this._onPhysicsSettled(payload);
+      this.multiplayer.onGameStateUpdated = (data) => this._onGameStateUpdated(data);
     }
 
     this._updateHUD();
@@ -264,12 +265,12 @@ export class Game {
     this.locked = false;
     this.shooter = null;
 
-    // Multiplayer: emit physics settled so opponent can sync
-    if (this.multiplayer && this.multiplayer.isActive && this.multiplayer.isMyTurn) {
+    // Multiplayer: emit physics settled so server can process game rules
+    if (this.multiplayer && this.multiplayer.isActive) {
       const bodyStates = this._captureBodyStates();
-      this.multiplayer.emitPhysicsSettled(bodyStates);
-      // Switch to opponent's turn
-      this.multiplayer.setTurn(false);
+      const lastTouchTeam = this.lastTouchTeam;
+      const playerIdx = this.players.indexOf(this.shooter);
+      this.multiplayer.emitPhysicsSettled(bodyStates, lastTouchTeam, playerIdx);
     }
 
     // Ball stopped in the small area, or in the big area after a keeper touch:
@@ -751,8 +752,6 @@ export class Game {
       piece.physBody.velocity.y += payload.impulse.y;
       piece.physBody.velocity.z += payload.impulse.z;
     }
-
-    // Turn will change when physics_settled is received
   }
 
   _onPhysicsSettled(payload) {
@@ -760,9 +759,20 @@ export class Game {
 
     // Correct positions to match the sender's state
     this.applyBodyStates(payload.bodyStates);
+  }
 
-    // Now it's our turn
-    this.multiplayer.setTurn(true);
+  _onGameStateUpdated(data) {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    const { gameState } = data;
+
+    // Sync game state from server
+    this.possession = gameState.possession;
+    this.touches = gameState.touches;
+    this.locked = gameState.locked;
+
+    // Update HUD to reflect server state
+    this._updateHUD();
   }
 }
 

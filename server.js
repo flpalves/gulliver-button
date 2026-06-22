@@ -21,8 +21,29 @@ const port = process.env.PORT || 3000;
 // Serve static files
 app.use(express.static(__dirname));
 
-// Room management: { code: { yellowSocket, blueSocket, gameConfig, roomCreator, yellowReady, blueReady } }
+// Room management
 const rooms = new Map();
+
+// Helper: Create initial game state based on rule mode
+function createGameState(ruleMode) {
+  const maxTouches = ruleMode === '12-toques' ? 12 : 4;
+  return {
+    possession: 'yellow',
+    touches: 0,
+    maxTouches,
+    lastTouchTeam: null,
+    lastShooter: null,
+    shooterTouchCount: 0,
+    locked: false,
+    ballDead: false,
+    lastShooterTeam: null
+  };
+}
+
+// Helper: Get opponent team
+function getOpponent(team) {
+  return team === 'yellow' ? 'blue' : 'yellow';
+}
 
 // Generate random 4-letter room code
 function generateRoomCode() {
@@ -32,6 +53,29 @@ function generateRoomCode() {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+// Broadcast game state to both players with turn info
+function _broadcastGameState(io, roomCode, room) {
+  const { yellowSocket, blueSocket, gameState } = room;
+
+  // Determine who has the turn
+  const yellowTurn = gameState.possession === 'yellow' && !gameState.locked;
+  const blueTurn = gameState.possession === 'blue' && !gameState.locked;
+
+  // Send to Yellow
+  io.to(yellowSocket).emit('game_state', {
+    gameState,
+    isMyTurn: yellowTurn
+  });
+
+  // Send to Blue
+  io.to(blueSocket).emit('game_state', {
+    gameState,
+    isMyTurn: blueTurn
+  });
+
+  console.log(`[GAME_STATE] 🎮 ${roomCode}: Possession=${gameState.possession} Touches=${gameState.touches}/${gameState.maxTouches} Locked=${gameState.locked}`);
 }
 
 io.on('connection', (socket) => {
@@ -51,7 +95,8 @@ io.on('connection', (socket) => {
       gameConfig,
       roomCreator: socket.id,
       yellowReady: false,
-      blueReady: false
+      blueReady: false,
+      gameState: createGameState(gameConfig.rule)
     });
 
     socket.join(code);
@@ -93,13 +138,33 @@ io.on('connection', (socket) => {
     console.log(`[ROOM] ${roomCode} room_ready event sent to both players`);
   });
 
-  // ─── SHOT FIRED (relay) ───
+  // ─── SHOT FIRED (server-controlled) ───
   socket.on('shot_fired', (payload) => {
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
-    if (roomCode) {
-      socket.to(roomCode).emit('shot_fired', payload);
-      console.log(`[SHOT] ${roomCode} - ${socket.id} fired shot`);
+    if (!roomCode) return;
+
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    const { gameState } = room;
+    const shooterTeam = socket.id === room.yellowSocket ? 'yellow' : 'blue';
+
+    // Validate: is it this team's turn and game not locked?
+    if (gameState.possession !== shooterTeam || gameState.locked) {
+      console.log(`[SHOT] ❌ ${roomCode} - Invalid shot from ${shooterTeam}: possession=${gameState.possession}, locked=${gameState.locked}`);
+      return;
     }
+
+    // Lock the game while shot is resolving
+    gameState.locked = true;
+    gameState.lastShooterTeam = shooterTeam;
+
+    // Relay shot to opponent
+    socket.to(roomCode).emit('shot_fired', payload);
+    console.log(`[SHOT] ${roomCode} - ${shooterTeam} fired shot`);
+
+    // Broadcast game state (locked, awaiting physics_settled)
+    _broadcastGameState(io, roomCode, room);
   });
 
   // ─── REPOSITION (relay) ───
@@ -110,13 +175,70 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ─── PHYSICS SETTLED (relay) ───
+  // ─── PHYSICS SETTLED (server-controlled) ───
   socket.on('physics_settled', (payload) => {
     const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
-    if (roomCode) {
-      socket.to(roomCode).emit('physics_settled', payload);
-      console.log(`[PHYSICS] ${roomCode} - ${socket.id} settled`);
+    if (!roomCode) return;
+
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    const { gameState } = room;
+
+    // Process shot result - apply game rules
+    // payload.lastTouchTeam indicates which team last touched the ball
+    if (payload.lastTouchTeam === gameState.possession) {
+      // Valid touch - ball touched by team with possession
+      gameState.touches++;
+
+      if (gameState.maxTouches === 12) {
+        // 12-touch mode: track consecutive touches
+        if (gameState.lastShooter === payload.playerIdx) {
+          gameState.shooterTouchCount++;
+        } else {
+          gameState.lastShooter = payload.playerIdx;
+          gameState.shooterTouchCount = 1;
+        }
+
+        // Check if exceeded max consecutive touches
+        if (gameState.shooterTouchCount > 3) {
+          gameState.possession = getOpponent(gameState.possession);
+          gameState.touches = 0;
+          gameState.lastShooter = null;
+          gameState.shooterTouchCount = 0;
+        } else if (gameState.touches >= gameState.maxTouches) {
+          gameState.possession = getOpponent(gameState.possession);
+          gameState.touches = 0;
+          gameState.lastShooter = null;
+          gameState.shooterTouchCount = 0;
+        }
+      } else {
+        // 4-touch mode
+        if (gameState.touches >= gameState.maxTouches) {
+          gameState.possession = getOpponent(gameState.possession);
+          gameState.touches = 0;
+          gameState.lastShooter = null;
+          gameState.shooterTouchCount = 0;
+        }
+      }
+    } else {
+      // Invalid touch (missed or deflected) - switch possession
+      gameState.possession = getOpponent(gameState.possession);
+      gameState.touches = 0;
+      gameState.lastShooter = null;
+      gameState.shooterTouchCount = 0;
     }
+
+    // Unlock game - next player can shoot
+    gameState.locked = false;
+    gameState.lastTouchTeam = payload.lastTouchTeam;
+
+    // Relay physics settled to opponent
+    socket.to(roomCode).emit('physics_settled', payload);
+    console.log(`[PHYSICS] ${roomCode} - Shot resolved. New possession: ${gameState.possession}`);
+
+    // Broadcast updated game state
+    _broadcastGameState(io, roomCode, room);
   });
 
   // ─── GAME EVENT (relay) ───
@@ -222,9 +344,14 @@ io.on('connection', (socket) => {
     // If both players are ready, emit start_game
     if (room.yellowReady && room.blueReady) {
       console.log(`[PLAYER_READY] 🚀 BOTH READY! Emitting both_players_ready to room ${roomCode}`);
+      // Reset game state when game starts
+      room.gameState = createGameState(room.gameConfig.rule);
       io.to(roomCode).emit('both_players_ready', {
-        gameConfig: room.gameConfig
+        gameConfig: room.gameConfig,
+        gameState: room.gameState
       });
+      // Broadcast initial game state
+      _broadcastGameState(io, roomCode, room);
       console.log(`[PLAYER_READY] ✅ both_players_ready event sent`);
     } else {
       console.log(`[PLAYER_READY] ⏳ Waiting for second player...`);

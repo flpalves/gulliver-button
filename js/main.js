@@ -130,8 +130,7 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   game = new Game({ players, ball, physics, field, ruleMode, gameMode, halfSeconds, multiplayer });
   input = new InputHandler(players, game, multiplayer);
 
-  // Set initial turn state: yellow always starts
-  multiplayer.setTurn(myTeam === 'yellow');
+  // Turn state is now controlled by the server via game_state events
 
   lastFrameTime = performance.now();
   requestAnimationFrame(animate);

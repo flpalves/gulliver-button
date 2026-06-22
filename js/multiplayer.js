@@ -10,6 +10,7 @@ export class MultiplayerManager {
     this.isRoomCreator = false; // true if I created the room
     this.gameInstance = null;
     this.inputInstance = null;
+    this.serverGameState = null; // Game state from server
 
     // Callbacks for game sync
     this.onRemoteShotFired = null;
@@ -18,6 +19,7 @@ export class MultiplayerManager {
     this.onOpponentDisconnected = null;
     this.onRemoteTeamChanged = null;
     this.onRemoteSettingsChanged = null;
+    this.onGameStateUpdated = null;
   }
 
   connect(serverUrl = 'http://localhost:3000') {
@@ -123,6 +125,16 @@ export class MultiplayerManager {
           this._dispatch('bothPlayersReady', data);
         });
 
+        this.socket.on('game_state', (data) => {
+          console.log('[Multiplayer] 📊 Game state updated:', data);
+          this.serverGameState = data.gameState;
+          this.isMyTurn = data.isMyTurn;
+          if (this.onGameStateUpdated) {
+            this.onGameStateUpdated(data);
+          }
+          this._dispatch('gameStateUpdated', data);
+        });
+
         this.socket.on('disconnect', () => {
           console.log('[Multiplayer] Disconnected from server');
         });
@@ -163,10 +175,12 @@ export class MultiplayerManager {
     });
   }
 
-  emitPhysicsSettled(bodyStates) {
+  emitPhysicsSettled(bodyStates, lastTouchTeam, playerIdx) {
     if (!this.socket || !this.isActive) return;
     this.socket.emit('physics_settled', {
       bodyStates,
+      lastTouchTeam,
+      playerIdx,
       timestamp: Date.now()
     });
   }
@@ -218,9 +232,7 @@ export class MultiplayerManager {
     });
   }
 
-  setTurn(isMyTurn) {
-    this.isMyTurn = isMyTurn;
-  }
+  // isMyTurn is now controlled by the server via game_state events
 
   disconnect() {
     if (this.socket) {
