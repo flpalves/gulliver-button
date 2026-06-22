@@ -233,3 +233,57 @@ canvas { display: block; }
   cursor: pointer; transition: transform .1s, background .15s;
 }
 #zoom-btns button:hover { background: rgba(40,40,60,.95); transform: scale(1.08); }
+
+/* ── Multiplayer UI ─────────────────────────────────── */
+.menu-overlay-active {
+  position: fixed; inset: 0; display: flex; align-items: center;
+  justify-content: center; z-index: 100; overflow-y: auto; padding: 20px;
+  background:
+    radial-gradient(ellipse at 25% 50%, rgba(0,50,10,.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 50%, rgba(0,20,50,.55) 0%, transparent 55%),
+    #07090f;
+}
+.menu-overlay-active::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+.menu-overlay-active.hidden { display: none; }
+
+#mode-select-overlay,
+#lobby-overlay,
+#create-room-overlay,
+#waiting-room-overlay,
+#join-room-overlay {
+  position: fixed; inset: 0; display: flex; align-items: center;
+  justify-content: center; z-index: 100; overflow-y: auto; padding: 20px;
+  background:
+    radial-gradient(ellipse at 25% 50%, rgba(0,50,10,.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 50%, rgba(0,20,50,.55) 0%, transparent 55%),
+    #07090f;
+}
+#mode-select-overlay::before,
+#lobby-overlay::before,
+#create-room-overlay::before,
+#waiting-room-overlay::before,
+#join-room-overlay::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+#mode-select-overlay.hidden,
+#lobby-overlay.hidden,
+#create-room-overlay.hidden,
+#waiting-room-overlay.hidden,
+#join-room-overlay.hidden {
+  display: none;
+}
+
+.hidden { display: none !important; }

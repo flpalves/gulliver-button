@@ -1,0 +1,168 @@
+// Multiplayer Manager — handles Socket.io connection and relay
+
+export class MultiplayerManager {
+  constructor() {
+    this.socket = null;
+    this.isActive = false;
+    this.myTeam = null; // 'yellow' or 'blue'
+    this.roomCode = null;
+    this.isMyTurn = false;
+    this.gameInstance = null;
+    this.inputInstance = null;
+
+    // Callbacks for game sync
+    this.onRemoteShotFired = null;
+    this.onPhysicsSettled = null;
+    this.onGameEvent = null;
+    this.onOpponentDisconnected = null;
+  }
+
+  connect(serverUrl = 'http://localhost:3000') {
+    return new Promise((resolve, reject) => {
+      try {
+        this.socket = io(serverUrl, {
+          reconnection: true,
+          reconnectionDelay: 1000,
+          reconnectionDelayMax: 5000,
+          reconnectionAttempts: 5
+        });
+
+        this.socket.on('connect', () => {
+          console.log('[Multiplayer] Connected to server');
+          resolve();
+        });
+
+        this.socket.on('connect_error', (error) => {
+          console.error('[Multiplayer] Connection error:', error);
+          reject(error);
+        });
+
+        this.socket.on('room_created', (data) => {
+          console.log('[Multiplayer] Room created:', data.roomCode);
+          this.roomCode = data.roomCode;
+          this.myTeam = 'yellow';
+          this.isMyTurn = true;
+          this._dispatch('roomCreated', { roomCode: data.roomCode, myTeam: this.myTeam });
+        });
+
+        this.socket.on('room_ready', (data) => {
+          console.log('[Multiplayer] Room ready:', data);
+          // Blue player's socket already knows their team from join, but we set isMyTurn to false
+          if (this.socket.id === data.blueSocketId) {
+            this.isMyTurn = false;
+          }
+          this._dispatch('roomReady', data);
+        });
+
+        this.socket.on('join_error', (data) => {
+          console.error('[Multiplayer] Join error:', data.message);
+          this._dispatch('joinError', data);
+        });
+
+        this.socket.on('shot_fired', (payload) => {
+          if (this.onRemoteShotFired) {
+            this.onRemoteShotFired(payload);
+          }
+        });
+
+        this.socket.on('reposition', (payload) => {
+          // For future: handle remote reposition
+        });
+
+        this.socket.on('physics_settled', (payload) => {
+          if (this.onPhysicsSettled) {
+            this.onPhysicsSettled(payload);
+          }
+        });
+
+        this.socket.on('game_event', (payload) => {
+          if (this.onGameEvent) {
+            this.onGameEvent(payload);
+          }
+        });
+
+        this.socket.on('opponent_disconnected', () => {
+          console.log('[Multiplayer] Opponent disconnected');
+          if (this.onOpponentDisconnected) {
+            this.onOpponentDisconnected();
+          }
+          this._dispatch('opponentDisconnected', {});
+        });
+
+        this.socket.on('disconnect', () => {
+          console.log('[Multiplayer] Disconnected from server');
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  createRoom(gameConfig) {
+    if (!this.socket) {
+      console.error('[Multiplayer] Not connected');
+      return;
+    }
+    this.isActive = true;
+    this.socket.emit('create_room', gameConfig);
+  }
+
+  joinRoom(roomCode) {
+    if (!this.socket) {
+      console.error('[Multiplayer] Not connected');
+      return;
+    }
+    this.isActive = true;
+    this.roomCode = roomCode;
+    this.myTeam = 'blue';
+    this.socket.emit('join_room', roomCode);
+  }
+
+  emitShotFired(playerIdx, impulse, bodyStates) {
+    if (!this.socket || !this.isActive) return;
+    this.socket.emit('shot_fired', {
+      playerIdx,
+      team: this.myTeam,
+      impulse,
+      bodyStates,
+      timestamp: Date.now()
+    });
+  }
+
+  emitPhysicsSettled(bodyStates) {
+    if (!this.socket || !this.isActive) return;
+    this.socket.emit('physics_settled', {
+      bodyStates,
+      timestamp: Date.now()
+    });
+  }
+
+  emitGameEvent(type, data) {
+    if (!this.socket || !this.isActive) return;
+    this.socket.emit('game_event', {
+      type,
+      data,
+      team: this.myTeam,
+      timestamp: Date.now()
+    });
+  }
+
+  setTurn(isMyTurn) {
+    this.isMyTurn = isMyTurn;
+  }
+
+  disconnect() {
+    if (this.socket) {
+      this.socket.disconnect();
+      this.isActive = false;
+    }
+  }
+
+  // Simple event dispatcher for UI updates
+  _dispatch(eventName, data) {
+    window.dispatchEvent(new CustomEvent(`multiplayer:${eventName}`, { detail: data }));
+  }
+}
+
+// Global instance
+export let multiplayer = new MultiplayerManager();

@@ -18,7 +18,7 @@ const RESTART_DELAY_MS = 1000;   // ball keeps flying free for 1s after leaving 
 const FLASH_MS = 600;
 
 export class Game {
-  constructor({ players, ball, physics, field = null, ruleMode = RULE_MODES.FOUR_TOUCHES, gameMode = GAME_MODES.STANDARD, halfSeconds = HALF_SECONDS, teamNames = DEFAULT_TEAM_LABEL }) {
+  constructor({ players, ball, physics, field = null, ruleMode = RULE_MODES.FOUR_TOUCHES, gameMode = GAME_MODES.STANDARD, halfSeconds = HALF_SECONDS, teamNames = DEFAULT_TEAM_LABEL, multiplayer = null }) {
     this.players = players;
     this.ball = ball;
     this.physics = physics;
@@ -27,6 +27,7 @@ export class Game {
     this.gameMode = gameMode;
     this.halfSeconds = halfSeconds;
     this.teamLabel = teamNames;
+    this.multiplayer = multiplayer;
 
     // Rule configuration
     this.maxTouches = ruleMode === RULE_MODES.TWELVE_TOUCHES ? 12 : 4;
@@ -105,6 +106,12 @@ export class Game {
 
     document.getElementById('obtn').addEventListener('click', () => this.handleOverlayBtn());
 
+    // Multiplayer callbacks
+    if (this.multiplayer) {
+      this.multiplayer.onRemoteShotFired = (payload) => this._onRemoteShotFired(payload);
+      this.multiplayer.onPhysicsSettled = (payload) => this._onPhysicsSettled(payload);
+    }
+
     this._updateHUD();
     this._updateTimerHUD();
     this._updateScoreHUD();
@@ -151,7 +158,7 @@ export class Game {
     return Math.abs(x) > C.HW || Math.abs(z) > C.HH;
   }
 
-  onShotFired(piece) {
+  onShotFired(piece, impulse = null) {
     this._stopTurnTimer();
     this.locked = true;
     this.shooter = piece;
@@ -159,6 +166,14 @@ export class Game {
     this.keeperTouchedBall = false;
     this.isDirectFromThrowIn = this.throwInKickPending;
     this.throwInKickPending = false;
+
+    // Multiplayer: emit shot to server
+    if (this.multiplayer && this.multiplayer.isActive && impulse) {
+      const bodyStates = this._captureBodyStates();
+      const playerIdx = this.players.indexOf(piece);
+      this.multiplayer.emitShotFired(playerIdx, impulse, bodyStates);
+    }
+
     this._setStatus('Resolvendo jogada...');
   }
 
@@ -248,6 +263,14 @@ export class Game {
 
     this.locked = false;
     this.shooter = null;
+
+    // Multiplayer: emit physics settled so opponent can sync
+    if (this.multiplayer && this.multiplayer.isActive && this.multiplayer.isMyTurn) {
+      const bodyStates = this._captureBodyStates();
+      this.multiplayer.emitPhysicsSettled(bodyStates);
+      // Switch to opponent's turn
+      this.multiplayer.setTurn(false);
+    }
 
     // Ball stopped in the small area, or in the big area after a keeper touch:
     // the possession team may reposition one player before the next shot.
@@ -669,6 +692,78 @@ export class Game {
     const half = this.half === 1 ? '1T' : '2T';
     document.getElementById('timer-val').textContent =
       `${half} ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  _captureBodyStates() {
+    const states = [];
+
+    // Ball
+    states.push({
+      id: 'ball',
+      pos: { x: this.ball.physBody.position.x, y: this.ball.physBody.position.y, z: this.ball.physBody.position.z },
+      vel: { x: this.ball.physBody.velocity.x, y: this.ball.physBody.velocity.y, z: this.ball.physBody.velocity.z },
+      quat: { x: this.ball.physBody.quaternion.x, y: this.ball.physBody.quaternion.y, z: this.ball.physBody.quaternion.z, w: this.ball.physBody.quaternion.w }
+    });
+
+    // Players
+    this.players.forEach((p, idx) => {
+      states.push({
+        id: `player_${idx}`,
+        pos: { x: p.physBody.position.x, y: p.physBody.position.y, z: p.physBody.position.z },
+        vel: { x: p.physBody.velocity.x, y: p.physBody.velocity.y, z: p.physBody.velocity.z },
+        quat: { x: p.physBody.quaternion.x, y: p.physBody.quaternion.y, z: p.physBody.quaternion.z, w: p.physBody.quaternion.w }
+      });
+    });
+
+    return states;
+  }
+
+  applyBodyStates(states) {
+    if (!states || !Array.isArray(states)) return;
+
+    states.forEach(state => {
+      if (state.id === 'ball' && this.ball) {
+        this.ball.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
+        this.ball.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+        this.ball.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
+      } else if (state.id.startsWith('player_')) {
+        const idx = parseInt(state.id.split('_')[1]);
+        const player = this.players[idx];
+        if (player) {
+          player.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
+          player.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+          player.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
+        }
+      }
+    });
+  }
+
+  _onRemoteShotFired(payload) {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    // Apply the body states from the remote player
+    this.applyBodyStates(payload.bodyStates);
+
+    // Apply the impulse to the remote player's piece
+    const piece = this.players[payload.playerIdx];
+    if (piece && payload.impulse) {
+      piece.physBody.velocity.x += payload.impulse.x;
+      piece.physBody.velocity.y += payload.impulse.y;
+      piece.physBody.velocity.z += payload.impulse.z;
+    }
+
+    // Now switch to their turn
+    this.multiplayer.setTurn(false);
+  }
+
+  _onPhysicsSettled(payload) {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    // Correct positions to match the sender's state
+    this.applyBodyStates(payload.bodyStates);
+
+    // Now it's our turn
+    this.multiplayer.setTurn(true);
   }
 }
 

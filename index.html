@@ -43,6 +43,82 @@
   <button id="reset-view-btn" title="Resetar câmera">⌂</button>
 </div>
 
+<!-- ── Multiplayer screens ── -->
+<div id="mode-select-overlay" class="menu-overlay-active">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title">FUTEBOL DE <span class="menu-title-gold">BOTÃO 3D</span></div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="margin-bottom: 20px; color: #fff; font-size: 14px;">Escolha o modo de jogo:</div>
+      <button class="menu-start-btn" id="local-play-btn" style="margin-bottom: 15px;">🎮 Jogar Local</button>
+      <button class="menu-start-btn" id="online-play-btn">🌐 Jogar Online</button>
+    </div>
+  </div>
+</div>
+
+<div id="lobby-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 450px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 20px;">MULTIPLAYER ONLINE</div>
+    </div>
+    <div style="padding: 20px;">
+      <div style="margin-bottom: 20px; text-align: center;">
+        <button class="menu-start-btn" id="create-room-btn" style="margin-bottom: 10px;">➕ Criar Sala</button>
+        <button class="menu-start-btn" id="join-room-btn">🔗 Entrar em Sala</button>
+      </div>
+      <button id="back-to-mode-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">← Voltar</button>
+    </div>
+  </div>
+</div>
+
+<div id="create-room-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Criando Sala...</div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="color: #fff; margin-bottom: 15px;">Aguarde a conexão com o servidor...</div>
+      <div id="connecting-spinner" style="font-size: 40px; animation: spin 1s linear infinite;">⚙️</div>
+    </div>
+    <style>
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </div>
+</div>
+
+<div id="waiting-room-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 450px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Sala de Espera</div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="color: #FFD700; font-size: 24px; font-weight: bold; margin-bottom: 15px;" id="room-code-display">AAAA</div>
+      <div style="color: #fff; margin-bottom: 20px; font-size: 14px;">Compartilhe este código com seu oponente</div>
+      <button id="copy-code-btn" style="width: 100%; padding: 12px; background: #FFD700; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">📋 Copiar Código</button>
+      <div style="color: #aaa; font-size: 12px; margin-bottom: 15px;">Aguardando oponente...</div>
+      <button id="cancel-room-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">❌ Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="join-room-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Entrar em Sala</div>
+    </div>
+    <div style="padding: 20px;">
+      <div style="color: #fff; margin-bottom: 10px; font-size: 14px;">Digite o código da sala:</div>
+      <input type="text" id="room-code-input" placeholder="Ex: ABCD" maxlength="4" style="width: 100%; padding: 12px; background: #333; color: #fff; border: 2px solid #FFD700; border-radius: 4px; font-size: 18px; text-transform: uppercase; margin-bottom: 20px; box-sizing: border-box; text-align: center;">
+      <button class="menu-start-btn" id="join-confirm-btn" style="margin-bottom: 10px;">🔗 Entrar</button>
+      <button id="back-to-lobby-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">← Voltar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Pre-game menu ── -->
 <div id="menu-overlay">
   <div class="menu-box">
@@ -136,6 +212,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   window.selectedMode  = 'standard';
   window.selectedBall  = 'sphere';
@@ -237,10 +314,10 @@
   };
 </script>
 <script type="module">
-  import { initGame, RULE_MODES, GAME_MODES } from '/js/main.js';
+  import { initGame, initGameMultiplayer, RULE_MODES, GAME_MODES } from '/js/main.js';
   import { TEAMS } from '/js/teams.js';
 
-  window.gameModule = { initGame, RULE_MODES, GAME_MODES };
+  window.gameModule = { initGame, initGameMultiplayer, RULE_MODES, GAME_MODES };
   window.TEAMS = TEAMS;
 
   window.team1Index = TEAMS.findIndex(function(t) { return t.id === window.selectedTeam1; });
@@ -250,6 +327,152 @@
 
   window.updateTeamDisplay(1);
   window.updateTeamDisplay(2);
+</script>
+
+<!-- Lobby UI Management -->
+<script type="module">
+  import { multiplayer } from '/js/multiplayer.js';
+
+  const MODE_SELECT = document.getElementById('mode-select-overlay');
+  const LOBBY = document.getElementById('lobby-overlay');
+  const CREATE_ROOM = document.getElementById('create-room-overlay');
+  const WAITING_ROOM = document.getElementById('waiting-room-overlay');
+  const JOIN_ROOM = document.getElementById('join-room-overlay');
+  const MENU = document.getElementById('menu-overlay');
+
+  function hideAll() {
+    MODE_SELECT.classList.add('hidden');
+    LOBBY.classList.add('hidden');
+    CREATE_ROOM.classList.add('hidden');
+    WAITING_ROOM.classList.add('hidden');
+    JOIN_ROOM.classList.add('hidden');
+    MENU.classList.add('hidden');
+  }
+
+  function show(overlay) {
+    hideAll();
+    overlay.classList.remove('hidden');
+  }
+
+  // Local play
+  document.getElementById('local-play-btn').addEventListener('click', () => {
+    show(MENU);
+  });
+
+  // Online play
+  document.getElementById('online-play-btn').addEventListener('click', () => {
+    show(LOBBY);
+  });
+
+  // Create room
+  document.getElementById('create-room-btn').addEventListener('click', async () => {
+    show(CREATE_ROOM);
+
+    try {
+      await multiplayer.connect();
+
+      const gameConfig = {
+        mode: window.selectedMode,
+        ball: window.selectedBall,
+        rule: window.selectedRule,
+        time: window.selectedTime
+      };
+
+      multiplayer.createRoom(gameConfig);
+    } catch (error) {
+      console.error('Failed to connect:', error);
+      alert('Falha ao conectar ao servidor: ' + error.message);
+      show(LOBBY);
+    }
+  });
+
+  // Room created - show waiting room
+  window.addEventListener('multiplayer:roomCreated', (e) => {
+    const { roomCode } = e.detail;
+    document.getElementById('room-code-display').textContent = roomCode;
+    show(WAITING_ROOM);
+  });
+
+  // Room ready - start game
+  window.addEventListener('multiplayer:roomReady', (e) => {
+    const { gameConfig } = e.detail;
+    document.getElementById('menu-overlay').classList.add('hidden');
+
+    if (window.gameModule && window.gameModule.initGame) {
+      const ruleMode = gameConfig.rule === '12-toques'
+        ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+        : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+      const m = gameConfig.mode;
+      const gm = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+                   : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+                   : window.gameModule.GAME_MODES.STANDARD;
+
+      window.gameModule.initGameMultiplayer(ruleMode, gameConfig.ball, gm, gameConfig.time * 60, multiplayer);
+      window.gameInitialized = true;
+    }
+  });
+
+  // Copy code button
+  document.getElementById('copy-code-btn').addEventListener('click', () => {
+    const code = document.getElementById('room-code-display').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      alert('Código copiado!');
+    }).catch(() => {
+      alert('Erro ao copiar código');
+    });
+  });
+
+  // Join room
+  document.getElementById('join-room-btn').addEventListener('click', () => {
+    show(JOIN_ROOM);
+    document.getElementById('room-code-input').focus();
+  });
+
+  document.getElementById('join-confirm-btn').addEventListener('click', async () => {
+    const code = document.getElementById('room-code-input').value.toUpperCase();
+    if (!code || code.length !== 4) {
+      alert('Digite um código válido');
+      return;
+    }
+
+    show(CREATE_ROOM);
+    document.getElementById('connecting-spinner').textContent = '⏳';
+
+    try {
+      await multiplayer.connect();
+      multiplayer.joinRoom(code);
+    } catch (error) {
+      console.error('Failed to connect:', error);
+      alert('Falha ao conectar: ' + error.message);
+      show(JOIN_ROOM);
+    }
+  });
+
+  // Join error
+  window.addEventListener('multiplayer:joinError', (e) => {
+    alert('Erro: ' + e.detail.message);
+    show(LOBBY);
+  });
+
+  // Opponent disconnected
+  window.addEventListener('multiplayer:opponentDisconnected', () => {
+    alert('Oponente desconectou!');
+    location.reload();
+  });
+
+  // Back buttons
+  document.getElementById('back-to-mode-btn').addEventListener('click', () => {
+    show(MODE_SELECT);
+  });
+
+  document.getElementById('back-to-lobby-btn').addEventListener('click', () => {
+    show(LOBBY);
+  });
+
+  document.getElementById('cancel-room-btn').addEventListener('click', () => {
+    multiplayer.disconnect();
+    show(MODE_SELECT);
+  });
 </script>
 </body>
 </html>

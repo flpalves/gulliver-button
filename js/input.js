@@ -15,9 +15,10 @@ export const INPUT = {
 };
 
 export class InputHandler {
-  constructor(players, rules) {
+  constructor(players, rules, multiplayer = null) {
     this.players = players;
     this.rules = rules;        // Game instance — canDrag/isReposition/onShotFired/onReposition
+    this.multiplayer = multiplayer;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.07);
@@ -128,6 +129,8 @@ export class InputHandler {
 
   _onDown(e) {
     if (e.button !== 0 || this.dragging) return;
+    // Block input if multiplayer and not my turn
+    if (this.multiplayer && this.multiplayer.isActive && !this.multiplayer.isMyTurn) return;
     const piece = this._pieceAt(e);
     if (!piece || !this.rules.canDrag(piece)) return;
 
@@ -252,12 +255,14 @@ export class InputHandler {
     const impulseMag = t * INPUT.MAX_IMPULSE;
     const dir = dragVec.clone().normalize().negate();   // slingshot: fires opposite the pull
 
+    const impulse = { x: dir.x * impulseMag, y: 0, z: dir.z * impulseMag };
+
     piece.physBody.velocity.set(0, 0, 0);
     piece.physBody.applyImpulse(
-      new CANNON.Vec3(dir.x * impulseMag, 0, dir.z * impulseMag),
+      new CANNON.Vec3(impulse.x, impulse.y, impulse.z),
       piece.physBody.position
     );
 
-    this.rules.onShotFired(piece);
+    this.rules.onShotFired(piece, impulse);
   }
 }

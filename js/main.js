@@ -99,6 +99,45 @@ function animate(now) {
   renderer.render(scene, camera);
 }
 
+function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere', gameMode = GAME_MODES.STANDARD, halfSeconds = 5 * 60, multiplayer) {
+  if (!multiplayer) return init(ruleMode, ballType, gameMode, halfSeconds);
+
+  // Apply team colours before any Player is constructed
+  clearTextureCache();
+  setGameMode(gameMode);
+
+  initThree();
+  initCameraButtons();
+  initZoom();
+  initPan();
+  physics = new Physics();
+  if (gameMode === GAME_MODES.SHOWBOL) physics.buildShowbolWalls();
+  field = new Field(physics, gameMode);
+  physics.setFarWalls(viewHalfX, viewHalfZ);
+  onViewChange((hx, hz) => physics.setFarWalls(hx, hz));
+
+  // Determine my team from multiplayer
+  const myTeam = multiplayer.myTeam; // 'yellow' or 'blue'
+  const opponentTeam = myTeam === 'yellow' ? 'blue' : 'yellow';
+  const teamIds = { yellow: myTeam === 'yellow' ? 'my-team' : 'opponent', blue: myTeam === 'blue' ? 'my-team' : 'opponent' };
+
+  players = createTeams(gameMode, teamIds);
+  players.forEach(p => physics.addPlayerBody(p));
+
+  ball = new Ball(ballType);
+  physics.addBallBody(ball);
+
+  game = new Game({ players, ball, physics, field, ruleMode, gameMode, halfSeconds, multiplayer });
+  input = new InputHandler(players, game, multiplayer);
+
+  // Set initial turn state: yellow always starts
+  multiplayer.setTurn(myTeam === 'yellow');
+
+  lastFrameTime = performance.now();
+  requestAnimationFrame(animate);
+  _stadiumAudio.play().catch(() => {});
+}
+
 // Export for use in HTML
-export { init as initGame, RULE_MODES, GAME_MODES };
+export { init as initGame, initMultiplayer as initGameMultiplayer, RULE_MODES, GAME_MODES };
 
