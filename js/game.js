@@ -719,20 +719,24 @@ export class Game {
     return states;
   }
 
-  applyBodyStates(states) {
+  applyBodyStates(states, syncVelocity = true) {
     if (!states || !Array.isArray(states)) return;
 
     states.forEach(state => {
       if (state.id === 'ball' && this.ball) {
         this.ball.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
-        this.ball.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+        if (syncVelocity) {
+          this.ball.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+        }
         this.ball.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
       } else if (state.id.startsWith('player_')) {
         const idx = parseInt(state.id.split('_')[1]);
         const player = this.players[idx];
         if (player) {
           player.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
-          player.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+          if (syncVelocity) {
+            player.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+          }
           player.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
         }
       }
@@ -742,23 +746,23 @@ export class Game {
   _onRemoteShotFired(payload) {
     if (!this.multiplayer || !this.multiplayer.isActive) return;
 
-    // Apply the body states from the remote player
-    this.applyBodyStates(payload.bodyStates);
+    // Sync body positions (NOT velocities - impulse will be applied next)
+    this.applyBodyStates(payload.bodyStates, false);
 
     // Apply the impulse to the remote player's piece
     const piece = this.players[payload.playerIdx];
     if (piece && payload.impulse) {
-      piece.physBody.velocity.x += payload.impulse.x;
-      piece.physBody.velocity.y += payload.impulse.y;
-      piece.physBody.velocity.z += payload.impulse.z;
+      piece.physBody.velocity.x = payload.impulse.x;
+      piece.physBody.velocity.y = payload.impulse.y;
+      piece.physBody.velocity.z = payload.impulse.z;
     }
   }
 
   _onPhysicsSettled(payload) {
     if (!this.multiplayer || !this.multiplayer.isActive) return;
 
-    // Correct positions to match the sender's state
-    this.applyBodyStates(payload.bodyStates);
+    // Sync final state including velocities (physics has settled)
+    this.applyBodyStates(payload.bodyStates, true);
   }
 
   _onGameStateUpdated(data) {
@@ -772,8 +776,9 @@ export class Game {
     this.locked = gameState.locked;
 
     // Sync body positions from server (for the player NOT currently controlling physics)
+    // Only sync positions, not velocities (velocities are calculated locally)
     if (gameState.bodyStates && !data.isMyTurn) {
-      this.applyBodyStates(gameState.bodyStates);
+      this.applyBodyStates(gameState.bodyStates, false);
     }
 
     // Update HUD to reflect server state
