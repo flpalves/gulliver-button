@@ -270,6 +270,11 @@
     if (slot === 1) window.team1Index = idx;
     else            window.team2Index = idx;
     window.updateTeamDisplay(slot);
+
+    // Emit team change if in multiplayer and is room creator
+    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
+      multiplayer.emitTeamChanged(window.selectedTeam1, window.selectedTeam2);
+    }
   };
 
   window.stabSelect = function(btn) {
@@ -282,6 +287,20 @@
     if (group === 'ball') window.selectedBall = btn.dataset.value;
     if (group === 'rule') window.selectedRule = btn.dataset.value;
     if (group === 'time') window.selectedTime = parseInt(btn.dataset.value);
+
+    // Emit settings change if in multiplayer and is room creator
+    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
+      var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+      multiplayer.emitSettingsChanged({
+        mode: window.selectedMode,
+        ball: window.selectedBall,
+        rule: window.selectedRule,
+        time: window.selectedTime,
+        team1: t1,
+        team2: t2
+      });
+    }
   };
 
   window.startGame = function() {
@@ -289,9 +308,35 @@
     window.currentGameMode = window.currentGameMode || 'local';
 
     if (window.currentGameMode === 'online') {
-      // Online mode: show lobby instead
-      document.getElementById('menu-overlay').classList.add('hidden');
-      document.getElementById('lobby-overlay').classList.remove('hidden');
+      // For multiplayer online, we're already in the menu after both players are ready
+      // Just start the game with current settings
+      if (window.gameModule && window.gameModule.initGameMultiplayer && typeof multiplayer !== 'undefined') {
+        document.getElementById('menu-overlay').classList.add('hidden');
+
+        var ruleMode = window.selectedRule === '12-toques'
+          ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+          : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+        var m = window.selectedMode;
+        var gm = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+                   : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+                   : window.gameModule.GAME_MODES.STANDARD;
+
+        var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+        var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+
+        window.gameModule.initGameMultiplayer(ruleMode, window.selectedBall, gm, window.selectedTime * 60, multiplayer);
+        window.gameInitialized = true;
+
+        if (t1 && t2) {
+          var badges = document.querySelectorAll('.tbadge');
+          badges[0].style.background = t1.css;
+          badges[1].style.background = t2.css;
+          document.getElementById('sy').style.color = t1.css;
+          document.getElementById('sb').style.color = t2.css;
+          document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + t1.name;
+          document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
+        }
+      }
       return;
     }
 
@@ -417,34 +462,101 @@
     show(WAITING_ROOM);
   });
 
-  // Room ready - start game
+  // Room ready - show menu for team/settings selection
   window.addEventListener('multiplayer:roomReady', (e) => {
-    const { gameConfig } = e.detail;
-    document.getElementById('menu-overlay').classList.add('hidden');
+    const { yellowSocketId, blueSocketId, gameConfig } = e.detail;
+    show(MENU);
 
-    if (window.gameModule && window.gameModule.initGameMultiplayer) {
-      const ruleMode = gameConfig.rule === '12-toques'
-        ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
-        : window.gameModule.RULE_MODES.FOUR_TOUCHES;
-      const m = gameConfig.mode;
-      const gm = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
-                   : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
-                   : window.gameModule.GAME_MODES.STANDARD;
+    // Disable settings for blue player
+    const isBluePlayer = multiplayer.myTeam === 'blue';
+    const settingsTabs = document.querySelectorAll('.setting-group');
+    settingsTabs.forEach(group => {
+      const buttons = group.querySelectorAll('.stab');
+      buttons.forEach(btn => {
+        btn.disabled = isBluePlayer;
+        btn.style.opacity = isBluePlayer ? '0.5' : '1';
+        btn.style.cursor = isBluePlayer ? 'not-allowed' : 'pointer';
+      });
+    });
 
-      window.gameModule.initGameMultiplayer(ruleMode, gameConfig.ball, gm, gameConfig.time * 60, multiplayer);
-      window.gameInitialized = true;
-
-      // Apply team colors
-      if (gameConfig.team1 && gameConfig.team2) {
-        const badges = document.querySelectorAll('.tbadge');
-        badges[0].style.background = gameConfig.team1.css;
-        badges[1].style.background = gameConfig.team2.css;
-        document.getElementById('sy').style.color = gameConfig.team1.css;
-        document.getElementById('sb').style.color = gameConfig.team2.css;
-        document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + gameConfig.team1.name;
-        document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + gameConfig.team2.name;
-      }
+    // Add label showing who is room creator
+    if (!document.getElementById('room-creator-info')) {
+      const label = document.createElement('div');
+      label.id = 'room-creator-info';
+      label.style.cssText = 'text-align: center; color: #aaa; font-size: 12px; margin-top: 10px;';
+      label.textContent = isBluePlayer ? '🔒 Somente o criador da sala pode alterar as configurações' : '⚙️ Você é o criador da sala';
+      document.querySelector('.menu-settings-bar').appendChild(label);
     }
+
+    // Pre-fill teams from gameConfig if needed
+    if (gameConfig.team1 && gameConfig.team2) {
+      window.team1Index = window.TEAMS.findIndex(t => t.id === gameConfig.team1.id);
+      window.team2Index = window.TEAMS.findIndex(t => t.id === gameConfig.team2.id);
+      window.selectedTeam1 = gameConfig.team1.id;
+      window.selectedTeam2 = gameConfig.team2.id;
+      window.updateTeamDisplay(1);
+      window.updateTeamDisplay(2);
+    }
+
+    // Pre-fill settings from gameConfig
+    if (gameConfig.mode) window.selectedMode = gameConfig.mode;
+    if (gameConfig.ball) window.selectedBall = gameConfig.ball;
+    if (gameConfig.rule) window.selectedRule = gameConfig.rule;
+    if (gameConfig.time) window.selectedTime = gameConfig.time;
+
+    // Update UI buttons to reflect settings
+    document.querySelectorAll('.stab[data-group="mode"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.mode);
+    });
+    document.querySelectorAll('.stab[data-group="ball"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.ball);
+    });
+    document.querySelectorAll('.stab[data-group="rule"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.rule);
+    });
+    document.querySelectorAll('.stab[data-group="time"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.time.toString());
+    });
+  });
+
+  // Remote team changed
+  window.addEventListener('multiplayer:teamChanged', (e) => {
+    const { team1, team2 } = e.detail;
+    window.selectedTeam1 = team1;
+    window.selectedTeam2 = team2;
+    window.team1Index = window.TEAMS.findIndex(t => t.id === team1);
+    window.team2Index = window.TEAMS.findIndex(t => t.id === team2);
+    window.updateTeamDisplay(1);
+    window.updateTeamDisplay(2);
+  });
+
+  // Remote settings changed
+  window.addEventListener('multiplayer:settingsChanged', (e) => {
+    const { gameConfig } = e.detail;
+    // Update local settings to match remote changes
+    window.selectedMode = gameConfig.mode;
+    window.selectedBall = gameConfig.ball;
+    window.selectedRule = gameConfig.rule;
+    window.selectedTime = gameConfig.time;
+
+    // Update UI buttons
+    document.querySelectorAll('.stab[data-group="mode"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.mode);
+    });
+    document.querySelectorAll('.stab[data-group="ball"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.ball);
+    });
+    document.querySelectorAll('.stab[data-group="rule"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.rule);
+    });
+    document.querySelectorAll('.stab[data-group="time"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.time.toString());
+    });
+  });
+
+  // Settings error handling
+  window.addEventListener('multiplayer:settingsError', (e) => {
+    alert('Erro: ' + e.detail.message);
   });
 
   // Copy code button

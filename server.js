@@ -21,7 +21,7 @@ const port = process.env.PORT || 3000;
 // Serve static files
 app.use(express.static(__dirname));
 
-// Room management: { code: { yellowSocket, blueSocket, gameConfig } }
+// Room management: { code: { yellowSocket, blueSocket, gameConfig, roomCreator } }
 const rooms = new Map();
 
 // Generate random 4-letter room code
@@ -47,7 +47,8 @@ io.on('connection', (socket) => {
     rooms.set(code, {
       yellowSocket: socket.id,
       blueSocket: null,
-      gameConfig
+      gameConfig,
+      roomCreator: socket.id
     });
 
     socket.join(code);
@@ -116,6 +117,31 @@ io.on('connection', (socket) => {
     if (roomCode) {
       socket.to(roomCode).emit('game_event', payload);
       console.log(`[EVENT] ${roomCode} - ${payload.type}`);
+    }
+  });
+
+  // ─── TEAM CHANGED (relay) ───
+  socket.on('team_changed', (payload) => {
+    const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
+    if (roomCode) {
+      socket.to(roomCode).emit('team_changed', payload);
+      console.log(`[TEAM] ${roomCode} - team changed`);
+    }
+  });
+
+  // ─── SETTINGS CHANGED (relay + validation) ───
+  socket.on('settings_changed', (payload) => {
+    const roomCode = Array.from(socket.rooms).find(r => rooms.has(r));
+    if (!roomCode) return;
+
+    const room = rooms.get(roomCode);
+    // Only room creator can change settings
+    if (socket.id === room.roomCreator) {
+      room.gameConfig = payload.gameConfig;
+      socket.to(roomCode).emit('settings_changed', payload);
+      console.log(`[SETTINGS] ${roomCode} - updated`);
+    } else {
+      socket.emit('settings_error', { message: 'Only room creator can change settings' });
     }
   });
 

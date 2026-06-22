@@ -7,6 +7,7 @@ export class MultiplayerManager {
     this.myTeam = null; // 'yellow' or 'blue'
     this.roomCode = null;
     this.isMyTurn = false;
+    this.isRoomCreator = false; // true if I created the room
     this.gameInstance = null;
     this.inputInstance = null;
 
@@ -15,6 +16,8 @@ export class MultiplayerManager {
     this.onPhysicsSettled = null;
     this.onGameEvent = null;
     this.onOpponentDisconnected = null;
+    this.onRemoteTeamChanged = null;
+    this.onRemoteSettingsChanged = null;
   }
 
   connect(serverUrl = 'http://localhost:3000') {
@@ -41,6 +44,7 @@ export class MultiplayerManager {
           console.log('[Multiplayer] Room created:', data.roomCode);
           this.roomCode = data.roomCode;
           this.myTeam = 'yellow';
+          this.isRoomCreator = true;
           this.isMyTurn = true;
           this._dispatch('roomCreated', { roomCode: data.roomCode, myTeam: this.myTeam });
         });
@@ -87,6 +91,27 @@ export class MultiplayerManager {
             this.onOpponentDisconnected();
           }
           this._dispatch('opponentDisconnected', {});
+        });
+
+        this.socket.on('team_changed', (payload) => {
+          console.log('[Multiplayer] Opponent team changed:', payload);
+          if (this.onRemoteTeamChanged) {
+            this.onRemoteTeamChanged(payload);
+          }
+          this._dispatch('teamChanged', payload);
+        });
+
+        this.socket.on('settings_changed', (payload) => {
+          console.log('[Multiplayer] Settings changed:', payload);
+          if (this.onRemoteSettingsChanged) {
+            this.onRemoteSettingsChanged(payload);
+          }
+          this._dispatch('settingsChanged', payload);
+        });
+
+        this.socket.on('settings_error', (data) => {
+          console.error('[Multiplayer] Settings error:', data.message);
+          this._dispatch('settingsError', data);
         });
 
         this.socket.on('disconnect', () => {
@@ -143,6 +168,23 @@ export class MultiplayerManager {
       type,
       data,
       team: this.myTeam,
+      timestamp: Date.now()
+    });
+  }
+
+  emitTeamChanged(team1, team2) {
+    if (!this.socket || !this.isActive) return;
+    this.socket.emit('team_changed', {
+      team1,
+      team2,
+      timestamp: Date.now()
+    });
+  }
+
+  emitSettingsChanged(gameConfig) {
+    if (!this.socket || !this.isActive) return;
+    this.socket.emit('settings_changed', {
+      gameConfig,
       timestamp: Date.now()
     });
   }
