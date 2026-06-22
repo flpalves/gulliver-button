@@ -63,6 +63,8 @@ export class Game {
     this._lastKickTime = 0;
     this._refereeSound = new Audio('assets/referee.mp3');
     this._refereeSound.volume = 0.8;
+    this._goalSound = new Audio('assets/goal.mp3');
+    this._goalSound.volume = 1.0;
 
     physics.onPlayerHitBall = (playerBody) => {
       const player = this.players.find(p => p.physBody === playerBody);
@@ -325,6 +327,8 @@ export class Game {
     this.scores[team]++;
     this._updateScoreHUD();
     this._flashGoal();
+    this._goalSound.currentTime = 0;
+    this._goalSound.play().catch(() => {});
     this._setStatus(`GOL do ${this.teamLabel[team]}!`);
 
     // Reset collision tracking for both goals

@@ -7,6 +7,7 @@ import { InputHandler } from './input.js';
 import { Game, RULE_MODES } from './game.js';
 import { setGameMode, setTeamColors, resetTeamColors, GAME_MODES } from './constants.js';
 import { clearTextureCache } from './textures.js';
+import { hexToNumber } from './teams.js';
 
 // ─────────────────────────────────────────────
 // INIT & LOOP
@@ -22,7 +23,12 @@ _stadiumAudio.volume = 0.5;
 function init(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere', gameMode = GAME_MODES.STANDARD, halfSeconds = 5 * 60, teamConfig = null) {
   // Apply team colours before any Player is constructed (they read C.COL_Y / C.RIM_Y etc.)
   if (teamConfig) {
-    setTeamColors(teamConfig.left.color, teamConfig.left.rimColor, teamConfig.right.color, teamConfig.right.rimColor);
+    setTeamColors(
+      hexToNumber(teamConfig.left.color),
+      hexToNumber(teamConfig.left.rimColor),
+      hexToNumber(teamConfig.right.color),
+      hexToNumber(teamConfig.right.rimColor)
+    );
   } else {
     resetTeamColors();
   }

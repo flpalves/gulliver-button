@@ -73,11 +73,31 @@ export function makePlayerTexture(playerIndex, teamColorHex, teamId) {
   const tex = new THREE.CanvasTexture(_buildAvatarCanvas(playerIndex, teamColorHex));
   _cache.set(key, tex);
 
-  // Try to swap in a real PNG if one exists
-  _loader.load(`assets/players/${teamId}/${playerIndex}.png`, (loaded) => {
-    tex.image    = loaded.image;
-    tex.needsUpdate = true;
-  });
+  // Try individual PNG first; if missing and it's an outfield player, try players.png
+  _loader.load(
+    `assets/players/${teamId}/${playerIndex}.png`,
+    (loaded) => {
+      tex.image = loaded.image;
+      tex.needsUpdate = true;
+    },
+    undefined,
+    playerIndex >= 2 ? () => {
+      _loader.load(`assets/players/${teamId}/players.png`, (loaded) => {
+        const S = 256, cx = S / 2;
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = S;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(loaded.image, 0, 0, S, S);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `bold ${Math.round(S * 0.30)}px Arial, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(playerIndex), cx, S * 0.725);
+        tex.image = cv;
+        tex.needsUpdate = true;
+      });
+    } : undefined
+  );
 
   return tex;
 }
