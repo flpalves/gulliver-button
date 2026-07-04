@@ -133,6 +133,9 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   game = new Game({ players, ball, physics, field, ruleMode, gameMode, halfSeconds, multiplayer });
   input = new InputHandler(players, game, multiplayer);
 
+  // Initialize isMyTurn - game always starts with yellow team
+  multiplayer.isMyTurn = (multiplayer.myTeam === 'yellow');
+
   // Configure multiplayer callbacks for game sync
   multiplayer.onRemoteShotFired = (payload) => game._onRemoteShotFired(payload);
 

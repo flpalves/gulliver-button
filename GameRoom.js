@@ -254,9 +254,10 @@ export class GameRoom {
       ball: this.gameState.ball
         ? {
             pos: { x: this.gameState.ball.position.x, y: this.gameState.ball.position.y, z: this.gameState.ball.position.z },
-            vel: { x: this.gameState.ball.velocity.x, y: this.gameState.ball.velocity.y, z: this.gameState.ball.velocity.z }
+            vel: { x: this.gameState.ball.velocity.x, y: this.gameState.ball.velocity.y, z: this.gameState.ball.velocity.z },
+            quat: this.gameState.ball.quaternion ? { x: this.gameState.ball.quaternion.x, y: this.gameState.ball.quaternion.y, z: this.gameState.ball.quaternion.z, w: this.gameState.ball.quaternion.w } : { x: 0, y: 0, z: 0, w: 1 }
           }
-        : { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 } },
+        : { pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 }, quat: { x: 0, y: 0, z: 0, w: 1 } },
 
       // Permissões
       canInteract: {
