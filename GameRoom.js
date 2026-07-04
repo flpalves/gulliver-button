@@ -151,6 +151,8 @@ export class GameRoom {
     floor.collisionFilterGroup = 8;  // GROUP.BALL_WALL
     floor.collisionFilterMask = 2;   // GROUP.BALL
     this.gameState.physics.addBody(floor);
+
+    console.log(`[Physics] Floor criado: pos=${floor.position.y}, groups: ${floor.collisionFilterGroup}, mask: ${floor.collisionFilterMask}`);
   }
 
   /**
@@ -254,6 +256,16 @@ export class GameRoom {
     // ===== FASE 3: FÍSICA =====
     // Aplicar física EXATAMENTE como o cliente (physics.js step())
     this._applyPhysicsStep();
+
+    // Debug: Log ball position every 10 ticks
+    if (this.tickCounter % 10 === 0) {
+      const ballY = this.gameState.ball.physBody.position.y;
+      const ballVelY = this.gameState.ball.physBody.velocity.y;
+      console.log(`[Ball] tick=${this.tickCounter}, y=${ballY.toFixed(2)}, velY=${ballVelY.toFixed(3)}`);
+      if (ballY < -100) {
+        console.warn(`[Ball] ⚠️ FALLING INFINITELY! y=${ballY}`);
+      }
+    }
 
     // ===== FASE 4: SINCRONIZAR (Passo 9) =====
     this.syncPhysicsToState();
@@ -500,11 +512,20 @@ export class GameRoom {
     ballBody.collisionFilterGroup = 2;   // GROUP.BALL
     ballBody.collisionFilterMask = 1 | 2 | 8 | 16;  // PLAYER | BALL | BALL_WALL | FAR_WALL
 
+    console.log(`[Physics] Ball criado: pos=${ballBody.position.y}, mass=${ballBody.mass}, groups: ${ballBody.collisionFilterGroup}, mask: ${ballBody.collisionFilterMask}`);
+
     // Listener de colisão: quando bola bate em jogador, adiciona upward impulse
     ballBody.addEventListener('collide', (e) => {
-      if (e.body.collisionFilterGroup !== 1) return;  // Só se colidir com PLAYER
-      const impact = Math.abs(e.contact.getImpactVelocityAlongNormal());
-      ballBody.velocity.y += Math.min(impact, 25) * 0.55;  // Hop effect (do cliente)
+      console.log(`[Collision] Ball hit: ${e.body.id}, filterGroup: ${e.body.collisionFilterGroup}`);
+      if (e.body.collisionFilterGroup === 8) {
+        // Colidiu com BALL_WALL (floor)
+        console.log(`[Collision] ✅ Ball hit FLOOR!`);
+      } else if (e.body.collisionFilterGroup === 1) {
+        // Colidiu com PLAYER
+        const impact = Math.abs(e.contact.getImpactVelocityAlongNormal());
+        ballBody.velocity.y += Math.min(impact, 25) * 0.55;  // Hop effect (do cliente)
+        console.log(`[Collision] Ball hit PLAYER, hop +${Math.min(impact, 25) * 0.55}`);
+      }
     });
 
     this.gameState.physics.addBody(ballBody);
