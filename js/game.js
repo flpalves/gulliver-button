@@ -752,12 +752,16 @@ export class Game {
     // Sync body positions (NOT velocities - impulse will be applied next)
     this.applyBodyStates(payload.bodyStates, false);
 
-    // Apply the impulse to the remote player's piece
+    // Apply the impulse to the remote player's piece (same way as local)
     const piece = this.players[payload.playerIdx];
     if (piece && payload.impulse) {
-      piece.physBody.velocity.x = payload.impulse.x;
-      piece.physBody.velocity.y = payload.impulse.y;
-      piece.physBody.velocity.z = payload.impulse.z;
+      // Reset velocity to 0 before applying impulse (same as local)
+      piece.physBody.velocity.set(0, 0, 0);
+      // Apply impulse the same way as in InputHandler
+      piece.physBody.applyImpulse(
+        new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
+        piece.physBody.position
+      );
     }
   }
 
