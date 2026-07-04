@@ -539,6 +539,12 @@ export class GameRoom {
       linearDamping: 0.2,  // Será dinâmico em step()
       angularDamping: 0.15  // Ball angular damping (do cliente)
     });
+
+    // CRÍTICO: Adicionar a forma de esfera à bola!
+    const ballShape = new CANNON.Sphere(BALL_RADIUS);
+    ballBody.addShape(ballShape);
+    ballBody.updateMassProperties();  // Recalcular após adicionar forma
+
     ballBody.position.set(0, BALL_RADIUS, 0);
     ballBody.isBall = true;  // Flag para identif. a bola em step()
 
