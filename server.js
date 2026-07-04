@@ -158,6 +158,10 @@ io.on('connection', (socket) => {
   // EVENTO: Shot Fired (processar no GameRoom e retransmitir)
   // ==========================================
   socket.on('shot_fired', (payload) => {
+    console.log(`[Shot Fired] ✅ SERVER RECEIVED shot_fired event!`);
+    console.log(`[Shot Fired] Socket ID: ${socket.id.substring(0, 8)}`);
+    console.log(`[Shot Fired] Payload:`, JSON.stringify(payload, null, 2));
+
     const room = findRoomBySocket(socket.id);
     if (!room || !room.gameRoom) {
       console.warn('[Shot Fired] ❌ Room or gameRoom not found!');
