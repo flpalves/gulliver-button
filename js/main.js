@@ -136,6 +136,38 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   // Configure multiplayer callbacks for game sync
   multiplayer.onRemoteShotFired = (payload) => game._onRemoteShotFired(payload);
 
+  // Sincronizar estado do jogo com updates do servidor
+  multiplayer.onStateUpdated = (state) => {
+    if (game && state.players) {
+      // Atualizar posições dos jogadores remotos (não controlados por este player)
+      const isMyTurnToControl = multiplayer.isMyTurn || !state.canInteract[multiplayer.myTeam];
+
+      for (const team of ['yellow', 'blue']) {
+        for (let i = 0; i < Math.min(players.length / 2, state.players[team].length); i++) {
+          const player = players.find(p => p.team === team && p.idx === i);
+          if (player) {
+            const statePlayer = state.players[team][i];
+            // Sincronizar posição do jogador remoto
+            if (statePlayer && statePlayer.pos) {
+              player.group.position.set(statePlayer.pos.x, statePlayer.pos.y, statePlayer.pos.z);
+              if (statePlayer.quat) {
+                player.group.quaternion.set(statePlayer.quat.x, statePlayer.quat.y, statePlayer.quat.z, statePlayer.quat.w);
+              }
+            }
+          }
+        }
+      }
+
+      // Sincronizar posição da bola
+      if (ball && state.ball && state.ball.pos) {
+        ball.group.position.set(state.ball.pos.x, state.ball.pos.y, state.ball.pos.z);
+      }
+
+      // Atualizar HUD com estado do servidor
+      if (game._updateHUD) game._updateHUD();
+    }
+  };
+
   // Turn state is now controlled by the server via game_state events
 
   lastFrameTime = performance.now();

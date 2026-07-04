@@ -89,7 +89,7 @@ export class GameRoom {
    * Iniciar a sala (começar tick loop)
    * Passos 6-11: Inicializar física e loop
    */
-  start() {
+  start(io) {
     if (this.isRunning) {
       console.warn(`[GameRoom] ${this.roomCode} já está rodando`);
       return;
@@ -98,6 +98,7 @@ export class GameRoom {
     console.log(`[GameRoom] ${this.roomCode} iniciada`);
     this.isRunning = true;
     this.lastTickTime = Date.now();
+    this.io = io; // Guardar referência do Socket.io
 
     try {
       // PASSO 6: Inicializar Cannon.js
@@ -520,6 +521,8 @@ export class GameRoom {
     console.log(`[TickLoop] ${this.roomCode}: Iniciando 60 FPS`);
 
     let lastTickTime = Date.now();
+    let broadcastCounter = 0;
+    const BROADCAST_EVERY_N_TICKS = 3; // Broadcast a cada 3 ticks (~20ms, 50 Hz)
 
     this.tickInterval = setInterval(() => {
       const now = Date.now();
@@ -527,6 +530,13 @@ export class GameRoom {
       lastTickTime = now;
 
       this.tick(deltaTime);
+
+      // Broadcast estado para clientes a cada N ticks
+      broadcastCounter++;
+      if (broadcastCounter >= BROADCAST_EVERY_N_TICKS && this.io) {
+        this.broadcast(this.io);
+        broadcastCounter = 0;
+      }
     }, 1000 / TICK_RATE); // ~16ms
   }
 

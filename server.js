@@ -134,8 +134,8 @@ io.on('connection', (socket) => {
       config: room.config
     });
 
-    // Iniciar GameRoom (Passo 5)
-    gameRoom.start();
+    // Iniciar GameRoom (Passo 5) - passar io para fazer broadcast
+    gameRoom.start(io);
 
     console.log(`[Room Joined] ${roomCode} by ${socket.id.substring(0, 8)} (sala cheia)`);
   });
