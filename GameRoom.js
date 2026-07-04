@@ -320,6 +320,13 @@ export class GameRoom {
   broadcast(io) {
     const state = this.serializeState();
 
+    // Debug: Verificar se bola está no estado
+    if (!state.ball) {
+      console.warn('[Broadcast] ❌ BALL NOT IN STATE!');
+    } else if (!state.ball.pos) {
+      console.warn('[Broadcast] ❌ BALL HAS NO POSITION!');
+    }
+
     const yellowSocket = io.sockets.sockets.get(this.yellowSocketId);
     const blueSocket = io.sockets.sockets.get(this.blueSocketId);
 
@@ -482,9 +489,11 @@ export class GameRoom {
     }
 
     // Bola
-    this.gameState.ball.position.copy(this.gameState.ball.physBody.position);
-    this.gameState.ball.velocity.copy(this.gameState.ball.physBody.velocity);
-    this.gameState.ball.quaternion.copy(this.gameState.ball.physBody.quaternion);
+    if (this.gameState.ball && this.gameState.ball.physBody) {
+      this.gameState.ball.position.copy(this.gameState.ball.physBody.position);
+      this.gameState.ball.velocity.copy(this.gameState.ball.physBody.velocity);
+      this.gameState.ball.quaternion.copy(this.gameState.ball.physBody.quaternion);
+    }
   }
 
   // ==========================================
