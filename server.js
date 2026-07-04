@@ -154,20 +154,35 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // EVENTO: Shot Fired (retransmitir para outro player)
+  // EVENTO: Shot Fired (processar no GameRoom e retransmitir)
   // ==========================================
   socket.on('shot_fired', (payload) => {
     const room = findRoomBySocket(socket.id);
-    if (!room) return;
+    if (!room || !room.gameRoom) return;
 
+    console.log(`[Shot Fired] ${room.code}: player ${payload.playerIdx}`);
+
+    // Processar o shot no GameRoom (aplicar impulso)
+    const team = socket.id === room.gameRoom.yellowSocketId ? 'yellow' : 'blue';
+    const player = room.gameRoom.gameState.players[team][payload.playerIdx];
+
+    if (player && payload.impulse) {
+      console.log(`[Shot Fired] Applying impulse to ${team}-${payload.playerIdx}`);
+      // Aplicar o impulso no servidor (mesmo como no cliente)
+      player.physBody.velocity.set(0, 0, 0);
+      player.physBody.applyImpulse(
+        new (require('cannon-es')).Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
+        player.physBody.position
+      );
+    }
+
+    // Retransmitir para o outro player também
     const yellowSocket = io.sockets.sockets.get(room.yellowSocketId);
     const blueSocket = io.sockets.sockets.get(room.blueSocketId);
     const otherSocket = socket.id === room.yellowSocketId ? blueSocket : yellowSocket;
 
-    // Retransmitir para o outro player
     if (otherSocket) {
       otherSocket.emit('shot_fired', payload);
-      console.log(`[Shot Fired] ${room.code}: player ${payload.playerIdx}`);
     }
   });
 
