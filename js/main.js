@@ -90,10 +90,15 @@ function animate(now) {
   lastFrameTime = now;
   frameTime = Math.min(frameTime, 0.1);   // clamp huge gaps (tab switch, etc.)
 
-  accumulator += frameTime;
-  while (accumulator >= PHYS.FIXED_DT) {
-    physics.step();
-    accumulator -= PHYS.FIXED_DT;
+  // In multiplayer: DON'T run local physics, server is authority
+  // Just sync meshes from the state we receive from server
+  if (!multiplayerUI || gameMode !== 'multiplayer') {
+    // Local mode: run physics normally
+    accumulator += frameTime;
+    while (accumulator >= PHYS.FIXED_DT) {
+      physics.step();
+      accumulator -= PHYS.FIXED_DT;
+    }
   }
 
   syncMeshes();
