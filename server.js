@@ -4,6 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import * as CANNON from 'cannon-es';
 import { GameRoom } from './GameRoom.js';
 
 dotenv.config();
@@ -171,7 +172,7 @@ io.on('connection', (socket) => {
       // Aplicar o impulso no servidor (mesmo como no cliente)
       player.physBody.velocity.set(0, 0, 0);
       player.physBody.applyImpulse(
-        new (require('cannon-es')).Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
+        new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
         player.physBody.position
       );
     }
