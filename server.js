@@ -141,10 +141,10 @@ io.on('connection', (socket) => {
       config: room.config
     });
 
-    // Iniciar GameRoom (Passo 5) - passar io para fazer broadcast
-    gameRoom.start(io);
+    // NÃO inicia GameRoom aqui - esperar ambos os jogadores ficarem prontos!
+    // gameRoom.start(io);
 
-    console.log(`[Room Joined] ${roomCode} by ${socket.id.substring(0, 8)} (sala cheia)`);
+    console.log(`[Room Joined] ${roomCode} by ${socket.id.substring(0, 8)} (sala cheia - AGUARDANDO PLAYER_READY)`);
   });
 
   // ==========================================
@@ -255,6 +255,12 @@ io.on('connection', (socket) => {
 
     // Se ambos estão prontos, iniciar o jogo
     if (yellowSocket && blueSocket) {
+      // Iniciar o GameRoom AQUI (física começa apenas quando ambos estão prontos!)
+      if (room.gameRoom && !room.gameRoom.isRunning) {
+        console.log(`[Game Start] Iniciando GameRoom e física...`);
+        room.gameRoom.start(io);
+      }
+
       yellowSocket.emit('both_players_ready', {});
       blueSocket.emit('both_players_ready', {});
       console.log(`[Game Start] Both players ready in ${room.code}`);
