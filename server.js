@@ -159,9 +159,13 @@ io.on('connection', (socket) => {
   // ==========================================
   socket.on('shot_fired', (payload) => {
     const room = findRoomBySocket(socket.id);
-    if (!room || !room.gameRoom) return;
+    if (!room || !room.gameRoom) {
+      console.warn('[Shot Fired] ❌ Room or gameRoom not found!');
+      return;
+    }
 
-    console.log(`[Shot Fired] ${room.code}: player ${payload.playerIdx}`);
+    console.log(`[Shot Fired] RECEIVED in ${room.code}: playerIdx=${payload.playerIdx}`);
+    console.log(`[Shot Fired] Payload:`, { playerIdx: payload.playerIdx, impulse: payload.impulse });
 
     // Converter índice global para índice dentro do time
     // playerIdx 0-10 = yellow, 11-21 = blue
@@ -174,17 +178,31 @@ io.on('connection', (socket) => {
       localIdx = payload.playerIdx - 11;
     }
 
-    const player = room.gameRoom.gameState.players[team][localIdx];
+    console.log(`[Shot Fired] Mapped to ${team}[${localIdx}]`);
 
-    if (player && payload.impulse) {
-      console.log(`[Shot Fired] Applying impulse to ${team}-${localIdx} (global ${payload.playerIdx})`);
-      // Aplicar o impulso no servidor
-      player.physBody.velocity.set(0, 0, 0);
-      player.physBody.applyImpulse(
-        new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
-        player.physBody.position
-      );
+    const playersArray = room.gameRoom.gameState.players[team];
+    console.log(`[Shot Fired] Team "${team}" has ${playersArray ? playersArray.length : 'UNDEFINED'} players`);
+
+    const player = playersArray ? playersArray[localIdx] : null;
+    console.log(`[Shot Fired] Player found:`, !!player, 'Has physBody:', player?.physBody ? '✓' : '✗');
+
+    if (!player) {
+      console.warn(`[Shot Fired] ❌ Player not found at ${team}[${localIdx}]`);
+      return;
     }
+
+    if (!payload.impulse) {
+      console.warn(`[Shot Fired] ❌ No impulse in payload`);
+      return;
+    }
+
+    console.log(`[Shot Fired] ✅ Applying impulse:`, payload.impulse);
+    player.physBody.velocity.set(0, 0, 0);
+    player.physBody.applyImpulse(
+      new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
+      player.physBody.position
+    );
+    console.log(`[Shot Fired] ✅ Impulse applied!`);
 
     // Retransmitir para o outro player também
     const yellowSocket = io.sockets.sockets.get(room.yellowSocketId);
