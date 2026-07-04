@@ -155,6 +155,7 @@ export class GameRoom {
 
   /**
    * Aplicar física EXATAMENTE como o cliente (physics.js)
+   * CRÍTICO: Chamar physics.step múltiplas vezes por tick!
    */
   _applyPhysicsStep() {
     const PHYS = {
@@ -166,33 +167,41 @@ export class GameRoom {
       FIXED_DT: 1 / 240,  // ← CRÍTICO: 1/240, não outro valor!
     };
 
-    // Aplicar gravidade MANUALMENTE apenas à bola (como cliente faz)
-    const ball = this.gameState.ball;
-    if (ball && ball.physBody) {
-      // Adiciona gravidade manualmente ao força da bola
-      const gravity = PHYS.SPHERE_GRAVITY;  // ou CUBE_GRAVITY se for cubo
-      ball.physBody.force.y += ball.physBody.mass * gravity;
+    // Chamar physics.step MÚLTIPLAS VEZES por tick
+    // Servidor roda em 60 FPS (1/60 por tick)
+    // FIXED_DT = 1/240
+    // Logo: 1/60 = 4 * (1/240), então precisa 4 chamadas por tick
+    const SUBSTEPS = 4;
 
-      // Damping dinâmico baseado se está no chão ou no ar
-      const ballRadius = 0.5;  // BALL_RADIUS
-      const onGround = ball.physBody.position.y <= ballRadius * 1.15;
-      ball.physBody.linearDamping = onGround ? PHYS.BALL_GROUND_DAMPING : PHYS.BALL_LIN_DAMPING;
-      ball.physBody.angularDamping = PHYS.BALL_ANG_DAMPING;
+    for (let i = 0; i < SUBSTEPS; i++) {
+      // Aplicar gravidade MANUALMENTE apenas à bola (como cliente faz)
+      const ball = this.gameState.ball;
+      if (ball && ball.physBody) {
+        // Adiciona gravidade manualmente ao força da bola
+        const gravity = PHYS.SPHERE_GRAVITY;  // ou CUBE_GRAVITY se for cubo
+        ball.physBody.force.y += ball.physBody.mass * gravity;
 
-      // Spin calculado dinamicamente (rolling without slipping)
-      const speed = Math.hypot(ball.physBody.velocity.x, ball.physBody.velocity.z);
-      if (speed > 0.05) {
-        const r = ballRadius;
-        ball.physBody.angularVelocity.set(
-          ball.physBody.velocity.z / r,
-          0,
-          -ball.physBody.velocity.x / r
-        );
+        // Damping dinâmico baseado se está no chão ou no ar
+        const ballRadius = BALL_RADIUS;
+        const onGround = ball.physBody.position.y <= ballRadius * 1.15;
+        ball.physBody.linearDamping = onGround ? PHYS.BALL_GROUND_DAMPING : PHYS.BALL_LIN_DAMPING;
+        ball.physBody.angularDamping = PHYS.BALL_ANG_DAMPING;
+
+        // Spin calculado dinamicamente (rolling without slipping)
+        const speed = Math.hypot(ball.physBody.velocity.x, ball.physBody.velocity.z);
+        if (speed > 0.05) {
+          const r = ballRadius;
+          ball.physBody.angularVelocity.set(
+            ball.physBody.velocity.z / r,
+            0,
+            -ball.physBody.velocity.x / r
+          );
+        }
       }
-    }
 
-    // Rodar física com FIXED_DT (1/240)
-    this.gameState.physics.step(PHYS.FIXED_DT);
+      // Rodar física com FIXED_DT (1/240)
+      this.gameState.physics.step(PHYS.FIXED_DT);
+    }
   }
 
   /**
@@ -406,15 +415,27 @@ export class GameRoom {
   // PASSO 7: CRIAR BODIES (Jogadores + Bola)
   // ==========================================
   createBodies() {
+    const PLAYER_LIN_DAMPING = 0.72;  // Player friction (do cliente)
+    const COL_H = 6;  // Altura do collider (do cliente)
+
     // AMARELO
     const yellowFormation = getInitialFormation('yellow');
     this.gameState.players.yellow = yellowFormation.map((pos, idx) => {
+      // Players são cilindros (como no cliente physics.js)
+      const shape = new CANNON.Cylinder(PLAYER_RADIUS, PLAYER_RADIUS, COL_H, 20);
       const body = new CANNON.Body({
         mass: PLAYER_MASS,
-        shape: new CANNON.Sphere(PLAYER_RADIUS),
         material: this.matPiece
       });
+
+      // Rotação do cilindro: -90° no eixo X (como no cliente)
+      const shapeQuat = new CANNON.Quaternion();
+      shapeQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+      body.addShape(shape, new CANNON.Vec3(0, 0, 0), shapeQuat);
+
       body.position.set(pos.x, PLAYER_RADIUS, pos.z);
+      body.fixedRotation = true;  // Players não rotam
+      body.linearDamping = PLAYER_LIN_DAMPING;  // Friction da mesa (cliente)
 
       // Collision filters - players colidem entre si e com a bola
       body.collisionFilterGroup = 1;   // GROUP.PLAYER
@@ -435,14 +456,21 @@ export class GameRoom {
     // AZUL (espelhado)
     const blueFormation = getInitialFormation('blue');
     this.gameState.players.blue = blueFormation.map((pos, idx) => {
+      const shape = new CANNON.Cylinder(PLAYER_RADIUS, PLAYER_RADIUS, COL_H, 20);
       const body = new CANNON.Body({
         mass: PLAYER_MASS,
-        shape: new CANNON.Sphere(PLAYER_RADIUS),
         material: this.matPiece
       });
-      body.position.set(pos.x, PLAYER_RADIUS, pos.z);
 
-      // Collision filters - players colidem entre si e com a bola
+      const shapeQuat = new CANNON.Quaternion();
+      shapeQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+      body.addShape(shape, new CANNON.Vec3(0, 0, 0), shapeQuat);
+
+      body.position.set(pos.x, PLAYER_RADIUS, pos.z);
+      body.fixedRotation = true;
+      body.linearDamping = PLAYER_LIN_DAMPING;
+
+      // Collision filters
       body.collisionFilterGroup = 1;   // GROUP.PLAYER
       body.collisionFilterMask = 1 | 2 | 16;  // PLAYER | BALL | FAR_WALL
 
@@ -461,16 +489,23 @@ export class GameRoom {
     // BOLA
     const ballBody = new CANNON.Body({
       mass: BALL_MASS,
-      shape: new CANNON.Sphere(BALL_RADIUS),
       material: this.matPiece,
-      linearDamping: 0.4,
-      angularDamping: 0.4
+      linearDamping: 0.2,  // Será dinâmico em step()
+      angularDamping: 0.15  // Ball angular damping (do cliente)
     });
     ballBody.position.set(0, BALL_RADIUS, 0);
+    ballBody.isBall = true;  // Flag para identif. a bola em step()
 
     // Collision filters - bola pode colidir com tudo
     ballBody.collisionFilterGroup = 2;   // GROUP.BALL
     ballBody.collisionFilterMask = 1 | 2 | 8 | 16;  // PLAYER | BALL | BALL_WALL | FAR_WALL
+
+    // Listener de colisão: quando bola bate em jogador, adiciona upward impulse
+    ballBody.addEventListener('collide', (e) => {
+      if (e.body.collisionFilterGroup !== 1) return;  // Só se colidir com PLAYER
+      const impact = Math.abs(e.contact.getImpactVelocityAlongNormal());
+      ballBody.velocity.y += Math.min(impact, 25) * 0.55;  // Hop effect (do cliente)
+    });
 
     this.gameState.physics.addBody(ballBody);
 
