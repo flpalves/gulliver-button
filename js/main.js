@@ -152,23 +152,27 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
         bodyStates.push({
           id: 'ball',
           pos: state.ball.pos,
-          vel: state.ball.vel || { x: 0, y: 0, z: 0 }
+          vel: state.ball.vel || { x: 0, y: 0, z: 0 },
+          quat: state.ball.quat || { x: 0, y: 0, z: 0, w: 1 }
         });
       }
 
       // Adicionar estado dos jogadores
+      // Nota: players[0-10] = amarelo, players[11-21] = azul
+      let playerGlobalIdx = 0;
       for (const team of ['yellow', 'blue']) {
         if (state.players[team]) {
           for (let i = 0; i < state.players[team].length; i++) {
             const statePlayer = state.players[team][i];
             if (statePlayer && statePlayer.pos) {
               bodyStates.push({
-                id: `player_${i}`,
+                id: `player_${playerGlobalIdx}`,
                 pos: statePlayer.pos,
                 vel: statePlayer.vel || { x: 0, y: 0, z: 0 },
-                quat: statePlayer.quat
+                quat: statePlayer.quat || { x: 0, y: 0, z: 0, w: 1 }
               });
             }
+            playerGlobalIdx++;
           }
         }
       }
