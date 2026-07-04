@@ -163,13 +163,22 @@ io.on('connection', (socket) => {
 
     console.log(`[Shot Fired] ${room.code}: player ${payload.playerIdx}`);
 
-    // Processar o shot no GameRoom (aplicar impulso)
-    const team = socket.id === room.gameRoom.yellowSocketId ? 'yellow' : 'blue';
-    const player = room.gameRoom.gameState.players[team][payload.playerIdx];
+    // Converter índice global para índice dentro do time
+    // playerIdx 0-10 = yellow, 11-21 = blue
+    let team, localIdx;
+    if (payload.playerIdx < 11) {
+      team = 'yellow';
+      localIdx = payload.playerIdx;
+    } else {
+      team = 'blue';
+      localIdx = payload.playerIdx - 11;
+    }
+
+    const player = room.gameRoom.gameState.players[team][localIdx];
 
     if (player && payload.impulse) {
-      console.log(`[Shot Fired] Applying impulse to ${team}-${payload.playerIdx}`);
-      // Aplicar o impulso no servidor (mesmo como no cliente)
+      console.log(`[Shot Fired] Applying impulse to ${team}-${localIdx} (global ${payload.playerIdx})`);
+      // Aplicar o impulso no servidor
       player.physBody.velocity.set(0, 0, 0);
       player.physBody.applyImpulse(
         new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
