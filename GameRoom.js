@@ -22,6 +22,26 @@ const PLAYER_RADIUS = 2.0;
 const PLAYER_MASS = 4;
 const BALL_MASS = 0.15;
 
+// ============================================
+// FORMAÇÕES (same as client-side formations.js)
+// ============================================
+function getInitialFormation(team) {
+  // Standard Futebol de Botão — 4-3-3, 11 jogadores por time
+  const yellowFormation = [
+    { x: 102.2, z: 0 }, // Goleiro
+    // Defensores (4)
+    { x: 72.8, z: -42 }, { x: 72.8, z: -14 }, { x: 72.8, z: 14 }, { x: 72.8, z: 42 },
+    // Meias (3)
+    { x: 43.4, z: -22.4 }, { x: 43.4, z: 0 }, { x: 43.4, z: 22.4 },
+    // Atacantes (3)
+    { x: 12.6, z: -16.8 }, { x: 12.6, z: 16.8 }, { x: 26.6, z: 0 },
+  ];
+
+  const blueFormation = yellowFormation.map(pos => ({ x: -pos.x, z: pos.z }));
+
+  return team === 'yellow' ? yellowFormation : blueFormation;
+}
+
 export class GameRoom {
   constructor(roomCode, config) {
     this.roomCode = roomCode;
@@ -315,7 +335,7 @@ export class GameRoom {
   // ==========================================
   createBodies() {
     // AMARELO
-    const yellowFormation = this.getInitialFormation('yellow');
+    const yellowFormation = getInitialFormation('yellow');
     this.gameState.players.yellow = yellowFormation.map((pos, idx) => {
       const body = new CANNON.Body({
         mass: PLAYER_MASS,
@@ -335,8 +355,8 @@ export class GameRoom {
       };
     });
 
-    // AZUL (simétrico)
-    const blueFormation = this.getInitialFormation('blue');
+    // AZUL (espelhado)
+    const blueFormation = getInitialFormation('blue');
     this.gameState.players.blue = blueFormation.map((pos, idx) => {
       const body = new CANNON.Body({
         mass: PLAYER_MASS,
@@ -373,46 +393,6 @@ export class GameRoom {
       velocity: new CANNON.Vec3(0, 0, 0),
       quaternion: new CANNON.Quaternion(0, 0, 0, 1)
     };
-  }
-
-  /**
-   * Formação inicial dos times (4-3-3)
-   */
-  getInitialFormation(team) {
-    if (team === 'yellow') {
-      return [
-        // Goleiro
-        { x: 50, z: 0 },
-        // Defensores (4)
-        { x: 40, z: -15 },
-        { x: 40, z: -5 },
-        { x: 40, z: 5 },
-        { x: 40, z: 15 },
-        // Meias (3)
-        { x: 20, z: -10 },
-        { x: 20, z: 0 },
-        { x: 20, z: 10 },
-        // Atacantes (3)
-        { x: 5, z: -12 },
-        { x: 5, z: 0 },
-        { x: 5, z: 12 }
-      ];
-    } else {
-      // Azul é simétrico (x * -1)
-      return [
-        { x: -50, z: 0 },
-        { x: -40, z: -15 },
-        { x: -40, z: -5 },
-        { x: -40, z: 5 },
-        { x: -40, z: 15 },
-        { x: -20, z: -10 },
-        { x: -20, z: 0 },
-        { x: -20, z: 10 },
-        { x: -5, z: -12 },
-        { x: -5, z: 0 },
-        { x: -5, z: 12 }
-      ];
-    }
   }
 
   // ==========================================
