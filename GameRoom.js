@@ -283,11 +283,9 @@ export class GameRoom {
 
     if (yellowSocket) {
       yellowSocket.emit('state_update', state);
-      console.log(`[Broadcast] Yellow: ball=${state.ball?.pos?.x?.toFixed(2)}, players=${state.players?.yellow?.length}`);
     }
     if (blueSocket) {
       blueSocket.emit('state_update', state);
-      console.log(`[Broadcast] Blue: ball=${state.ball?.pos?.x?.toFixed(2)}, players=${state.players?.blue?.length}`);
     }
   }
 
