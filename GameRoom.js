@@ -21,26 +21,6 @@ const PLAYER_RADIUS = 2.0;
 const PLAYER_MASS = 4;
 const BALL_MASS = 0.15;
 
-// ============================================
-// FORMAÇÕES (same as client-side formations.js)
-// ============================================
-function getInitialFormation(team) {
-  // Standard Futebol de Botão — 4-3-3, 11 jogadores por time
-  const yellowFormation = [
-    { x: 102.2, z: 0 }, // Goleiro
-    // Defensores (4)
-    { x: 72.8, z: -42 }, { x: 72.8, z: -14 }, { x: 72.8, z: 14 }, { x: 72.8, z: 42 },
-    // Meias (3)
-    { x: 43.4, z: -22.4 }, { x: 43.4, z: 0 }, { x: 43.4, z: 22.4 },
-    // Atacantes (3)
-    { x: 12.6, z: -16.8 }, { x: 12.6, z: 16.8 }, { x: 26.6, z: 0 },
-  ];
-
-  const blueFormation = yellowFormation.map(pos => ({ x: -pos.x, z: pos.z }));
-
-  return team === 'yellow' ? yellowFormation : blueFormation;
-}
-
 export class GameRoom {
   constructor(roomCode, config) {
     this.roomCode = roomCode;
@@ -465,7 +445,7 @@ export class GameRoom {
     const COL_H = 6;  // Altura do collider (do cliente)
 
     // AMARELO
-    const yellowFormation = getInitialFormation('yellow');
+    const yellowFormation = this.getInitialFormation('yellow');
     this.gameState.players.yellow = yellowFormation.map((pos, idx) => {
       // Players são cilindros (como no cliente physics.js)
       const shape = new CANNON.Cylinder(PLAYER_RADIUS, PLAYER_RADIUS, COL_H, 20);
@@ -500,7 +480,7 @@ export class GameRoom {
     });
 
     // AZUL (espelhado)
-    const blueFormation = getInitialFormation('blue');
+    const blueFormation = this.getInitialFormation('blue');
     this.gameState.players.blue = blueFormation.map((pos, idx) => {
       const shape = new CANNON.Cylinder(PLAYER_RADIUS, PLAYER_RADIUS, COL_H, 20);
       const body = new CANNON.Body({
@@ -953,6 +933,23 @@ export class GameRoom {
   /**
    * Reset do campo após gol
    */
+  // Get initial formation for a team
+  getInitialFormation(team) {
+    const yellowFormation = [
+      { x: 102.2, z: 0 }, // Goleiro
+      // Defensores (4)
+      { x: 72.8, z: -42 }, { x: 72.8, z: -14 }, { x: 72.8, z: 14 }, { x: 72.8, z: 42 },
+      // Meias (3)
+      { x: 43.4, z: -22.4 }, { x: 43.4, z: 0 }, { x: 43.4, z: 22.4 },
+      // Atacantes (3)
+      { x: 12.6, z: -16.8 }, { x: 12.6, z: 16.8 }, { x: 26.6, z: 0 },
+    ];
+
+    const blueFormation = yellowFormation.map(pos => ({ x: -pos.x, z: pos.z }));
+
+    return team === 'yellow' ? yellowFormation : blueFormation;
+  }
+
   resetField() {
     // Reset de posições
     for (const team of ['yellow', 'blue']) {
