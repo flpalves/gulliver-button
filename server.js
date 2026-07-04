@@ -68,6 +68,11 @@ io.on('connection', (socket) => {
   console.log(`[Connected] ${socket.id}`);
   console.log(`[Connected] Registering shot_fired listener...`);
 
+  // Debug: Log all socket events
+  socket.onAny((event, ...args) => {
+    console.log(`[Socket] 📨 EVENT: ${event}`, args.length > 0 ? args[0] : '');
+  });
+
   // ==========================================
   // EVENTO: Criar Sala
   // ==========================================
