@@ -313,14 +313,32 @@ export class MultiplayerManager {
   }
 
   emitShotFired(playerIdx, impulse, bodyStates) {
-    if (!this.isActive || !this.socket) return;
+    console.log('[Multiplayer] emitShotFired called:', {
+      playerIdx,
+      isActive: this.isActive,
+      socketExists: !!this.socket,
+      socketConnected: this.socket?.connected,
+      socketId: this.socket?.id?.substring(0, 8)
+    });
+
+    if (!this.isActive) {
+      console.warn('[Multiplayer] ❌ Not active, not emitting');
+      return;
+    }
+
+    if (!this.socket) {
+      console.warn('[Multiplayer] ❌ Socket is null, not emitting');
+      return;
+    }
+
+    console.log('[Multiplayer] ✅ Emitting shot_fired...');
     this.socket.emit('shot_fired', {
       playerIdx,
       impulse,
       bodyStates,
       timestamp: Date.now()
     });
-    console.log('[Multiplayer] Emitted shot_fired:', { playerIdx, impulse });
+    console.log('[Multiplayer] ✅ Emitted shot_fired:', { playerIdx, impulse });
   }
 
   _dispatch(eventName, detail) {

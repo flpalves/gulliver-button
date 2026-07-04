@@ -66,6 +66,7 @@ function findRoomBySocket(socketId) {
 // ============================================
 io.on('connection', (socket) => {
   console.log(`[Connected] ${socket.id}`);
+  console.log(`[Connected] Registering shot_fired listener...`);
 
   // ==========================================
   // EVENTO: Criar Sala
