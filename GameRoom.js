@@ -135,24 +135,21 @@ export class GameRoom {
 
   /**
    * Criar o piso (floor) - CRÍTICO para a bola não cair infinitamente!
-   * Exatamente como em physics.js _buildWalls()
+   * Usando Plane infinito ao invés de Box (bug do Cannon.js com Box estático + Sphere)
    */
   _buildFloor() {
-    const FLOOR_MARGIN = 80;
-    const floorHalfH = 1;
+    // Usar Plane infinito para evitar bug do Cannon.js
     const floor = new CANNON.Body({ mass: 0, material: this.matFloor });
-    floor.addShape(new CANNON.Box(new CANNON.Vec3(
-      FIELD_WIDTH / 2 + FLOOR_MARGIN,
-      floorHalfH,
-      FIELD_HEIGHT / 2 + FLOOR_MARGIN
-    )));
-    floor.position.set(0, -floorHalfH, 0);
+    const planeShape = new CANNON.Plane();
+    floor.addShape(planeShape);
+    floor.position.set(0, 0, 0);  // Plane está em y=0 (topo da mesa)
+
     // Collision mask: apenas a bola pode colidir com o piso
     floor.collisionFilterGroup = 8;  // GROUP.BALL_WALL
     floor.collisionFilterMask = 2;   // GROUP.BALL
     this.gameState.physics.addBody(floor);
 
-    console.log(`[Physics] Floor criado: pos=${floor.position.y}, groups: ${floor.collisionFilterGroup}, mask: ${floor.collisionFilterMask}`);
+    console.log(`[Physics] Floor criado (PLANE): pos=${floor.position.y}, groups: ${floor.collisionFilterGroup}, mask: ${floor.collisionFilterMask}`);
   }
 
   /**
