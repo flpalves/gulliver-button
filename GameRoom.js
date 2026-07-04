@@ -169,6 +169,13 @@ export class GameRoom {
       FIXED_DT: 1 / 240,  // ← CRÍTICO: 1/240, não outro valor!
     };
 
+    // Aplicar gravidade UMA ÚNICA VEZ antes do loop (não 4x!)
+    const ball = this.gameState.ball;
+    if (ball && ball.physBody) {
+      const gravity = PHYS.SPHERE_GRAVITY;  // ou CUBE_GRAVITY se for cubo
+      ball.physBody.force.y += ball.physBody.mass * gravity;
+    }
+
     // Chamar physics.step MÚLTIPLAS VEZES por tick
     // Servidor roda em 60 FPS (1/60 por tick)
     // FIXED_DT = 1/240
@@ -176,14 +183,8 @@ export class GameRoom {
     const SUBSTEPS = 4;
 
     for (let i = 0; i < SUBSTEPS; i++) {
-      // Aplicar gravidade MANUALMENTE apenas à bola (como cliente faz)
-      const ball = this.gameState.ball;
+      // Damping dinâmico baseado se está no chão ou no ar
       if (ball && ball.physBody) {
-        // Adiciona gravidade manualmente ao força da bola
-        const gravity = PHYS.SPHERE_GRAVITY;  // ou CUBE_GRAVITY se for cubo
-        ball.physBody.force.y += ball.physBody.mass * gravity;
-
-        // Damping dinâmico baseado se está no chão ou no ar
         const ballRadius = BALL_RADIUS;
         const onGround = ball.physBody.position.y <= ballRadius * 1.15;
         ball.physBody.linearDamping = onGround ? PHYS.BALL_GROUND_DAMPING : PHYS.BALL_LIN_DAMPING;
