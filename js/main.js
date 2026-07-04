@@ -83,8 +83,18 @@ function syncMeshes() {
 
   // Sync ball mesh from physics body
   if (ball) {
+    const ballPos = ball.physBody.position;
+    const meshPos = ball.group.position;
     ball.group.position.copy(ball.physBody.position);
     ball.mesh.quaternion.copy(ball.physBody.quaternion);
+
+    // Log ball position every 60 frames (~1 second)
+    if (Math.random() < 0.02) {
+      console.log('[Render] Ball mesh sync:', {
+        physPos: `(${ballPos.x.toFixed(1)}, ${ballPos.y.toFixed(1)}, ${ballPos.z.toFixed(1)})`,
+        meshPos: `(${meshPos.x.toFixed(1)}, ${meshPos.y.toFixed(1)}, ${meshPos.z.toFixed(1)})`
+      });
+    }
   }
 }
 
