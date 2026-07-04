@@ -9,7 +9,6 @@ import { setGameMode, setTeamColors, resetTeamColors, GAME_MODES } from './const
 import { clearTextureCache } from './textures.js';
 import { hexToNumber } from './teams.js';
 import { MultiplayerUI } from './multiplayer-ui.js';
-import { InterpolationManager, DesyncDetector } from './interpolation.js';
 
 // ─────────────────────────────────────────────
 // INIT & LOOP
@@ -19,8 +18,6 @@ let lastFrameTime = 0;
 let accumulator = 0;
 let multiplayerUI = null;
 let gameMode = 'local';
-let interpolationMgr = null;
-let desyncDetector = null;
 
 const _stadiumAudio = new Audio('assets/stadium.mp3');
 _stadiumAudio.loop = true;
@@ -78,57 +75,15 @@ function init(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere', gameMode 
 }
 
 function syncMeshes() {
-  const isMultiplayer = multiplayerUI && gameMode === 'multiplayer';
-  const now = Date.now();
+  // Sync all player meshes from physics bodies
+  players.forEach(p => {
+    p.group.position.copy(p.physBody.position);
+  });
 
-  if (isMultiplayer && interpolationMgr) {
-    // MULTIPLAYER: Interpolar suavemente entre servidor e previsão local
-    const alpha = interpolationMgr.getInterpolationAlpha(now);
-
-    players.forEach((p, idx) => {
-      const serverState = interpolationMgr.serverStates.get(`player_${idx}`);
-      if (serverState) {
-        // Misturar posição do servidor com previsão local
-        const interpolated = interpolationMgr.lerpPosition(serverState.pos, p.physBody.position, alpha);
-        p.group.position.copy(interpolated);
-      } else {
-        // Sem dados do servidor ainda, usar previsão local
-        p.group.position.copy(p.physBody.position);
-      }
-    });
-
-    if (ball) {
-      const serverState = interpolationMgr.serverStates.get('ball');
-      if (serverState) {
-        // Misturar posição da bola
-        const interpolated = interpolationMgr.lerpPosition(serverState.pos, ball.physBody.position, alpha);
-        ball.group.position.set(interpolated.x, interpolated.y, interpolated.z);
-      } else {
-        ball.group.position.copy(ball.physBody.position);
-      }
-      ball.mesh.quaternion.copy(ball.physBody.quaternion);
-    }
-  } else {
-    // LOCAL: Sincronizar diretamente (sem interpolação)
-    players.forEach(p => {
-      p.group.position.x = p.physBody.position.x;
-      p.group.position.z = p.physBody.position.z;
-    });
-
-    if (ball) {
-      const ballPos = ball.physBody.position;
-      const meshPos = ball.group.position;
-      ball.group.position.copy(ball.physBody.position);
-      ball.mesh.quaternion.copy(ball.physBody.quaternion);
-
-      // Log ball position every 60 frames (~1 second)
-      if (Math.random() < 0.02) {
-        console.log('[Render] Ball mesh sync:', {
-          physPos: `(${ballPos.x.toFixed(1)}, ${ballPos.y.toFixed(1)}, ${ballPos.z.toFixed(1)})`,
-          meshPos: `(${meshPos.x.toFixed(1)}, ${meshPos.y.toFixed(1)}, ${meshPos.z.toFixed(1)})`
-        });
-      }
-    }
+  // Sync ball mesh from physics body
+  if (ball) {
+    ball.group.position.copy(ball.physBody.position);
+    ball.mesh.quaternion.copy(ball.physBody.quaternion);
   }
 }
 
@@ -178,10 +133,6 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   physics.setFarWalls(viewHalfX, viewHalfZ);
   onViewChange((hx, hz) => physics.setFarWalls(hx, hz));
 
-  // Initialize interpolation and desync detection
-  interpolationMgr = new InterpolationManager();
-  desyncDetector = new DesyncDetector();
-
   // Determine my team from multiplayer
   const myTeam = multiplayer.myTeam; // 'yellow' or 'blue'
   const opponentTeam = myTeam === 'yellow' ? 'blue' : 'yellow';
@@ -225,8 +176,6 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
     }
 
     try {
-      const now = Date.now();
-
       // Sincronizar estado de possessão (do servidor)
       game.possession = state.possession;
       game.touches = state.touches;
@@ -243,11 +192,6 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
           vel: state.ball.vel || { x: 0, y: 0, z: 0 },
           quat: state.ball.quat || { x: 0, y: 0, z: 0, w: 1 }
         });
-        // Registrar para interpolação suave
-        if (interpolationMgr) {
-          interpolationMgr.recordServerState('ball', state.ball.pos, state.ball.vel || {x:0,y:0,z:0}, state.ball.quat || {x:0,y:0,z:0,w:1}, now);
-          desyncDetector.checkDesync('ball', state.ball.pos);
-        }
       } else {
         console.warn('[Main] No ball in state!');
       }
@@ -265,29 +209,17 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
                 vel: statePlayer.vel || { x: 0, y: 0, z: 0 },
                 quat: statePlayer.quat || { x: 0, y: 0, z: 0, w: 1 }
               });
-              // Registrar para interpolação suave
-              if (interpolationMgr) {
-                interpolationMgr.recordServerState(`player_${playerGlobalIdx}`, statePlayer.pos, statePlayer.vel || {x:0,y:0,z:0}, statePlayer.quat || {x:0,y:0,z:0,w:1}, now);
-                desyncDetector.checkDesync(`player_${playerGlobalIdx}`, statePlayer.pos);
-              }
             }
             playerGlobalIdx++;
           }
         }
       }
 
-      console.log('[Main] Built bodyStates:', bodyStates.length, 'bodies');
-
       // Aplicar TODOS os estados da física (bola + jogadores) sincronizando com servidor
       if (bodyStates.length > 0) {
         game.applyBodyStates(bodyStates, true);
       } else {
         console.warn('[Main] No bodyStates to apply!');
-      }
-
-      // Cleanup antiga interpolation data
-      if (interpolationMgr) {
-        interpolationMgr.cleanup(now);
       }
 
       // Atualizar HUD com estado do servidor
