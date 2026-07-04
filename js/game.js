@@ -754,20 +754,10 @@ export class Game {
   _onRemoteShotFired(payload) {
     if (!this.multiplayer || !this.multiplayer.isActive) return;
 
-    // Sync body positions (NOT velocities - impulse will be applied next)
-    this.applyBodyStates(payload.bodyStates, false);
-
-    // Apply the impulse to the remote player's piece (same way as local)
-    const piece = this.players[payload.playerIdx];
-    if (piece && payload.impulse) {
-      // Reset velocity to 0 before applying impulse (same as local)
-      piece.physBody.velocity.set(0, 0, 0);
-      // Apply impulse the same way as in InputHandler
-      piece.physBody.applyImpulse(
-        new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
-        piece.physBody.position
-      );
-    }
+    // In multiplayer: server is the only physics authority
+    // DO NOT apply impulse locally — the server will apply it and broadcast new state
+    // This is just a notification that a remote shot happened
+    // The actual physics will be synced via state_update
   }
 
   _onPhysicsSettled(payload) {

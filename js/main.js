@@ -75,12 +75,17 @@ function init(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere', gameMode 
 }
 
 function syncMeshes() {
+  // Sync all player meshes from physics bodies
   players.forEach(p => {
     p.group.position.x = p.physBody.position.x;
     p.group.position.z = p.physBody.position.z;
   });
-  ball.group.position.copy(ball.physBody.position);
-  ball.mesh.quaternion.copy(ball.physBody.quaternion);
+
+  // Sync ball mesh from physics body
+  if (ball) {
+    ball.group.position.copy(ball.physBody.position);
+    ball.mesh.quaternion.copy(ball.physBody.quaternion);
+  }
 }
 
 function animate(now) {
@@ -90,9 +95,11 @@ function animate(now) {
   lastFrameTime = now;
   frameTime = Math.min(frameTime, 0.1);   // clamp huge gaps (tab switch, etc.)
 
-  // In multiplayer: DON'T run local physics, server is authority
-  // Just sync meshes from the state we receive from server
-  if (!multiplayerUI || gameMode !== 'multiplayer') {
+  // MULTIPLAYER: Server is sole authority for physics
+  // Client NEVER runs physics.step() in multiplayer — only sync meshes from server state
+  const isMultiplayer = multiplayerUI && gameMode === 'multiplayer';
+
+  if (!isMultiplayer) {
     // Local mode: run physics normally
     accumulator += frameTime;
     while (accumulator >= PHYS.FIXED_DT) {
@@ -103,6 +110,8 @@ function animate(now) {
 
   syncMeshes();
   field.goals.forEach(goal => goal.update());
+
+  // Only update game state for UI/scoring, not physics
   game.update(frameTime);
   renderer.render(scene, camera);
 }
@@ -146,42 +155,30 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
 
   // Sincronizar estado do jogo com updates do servidor
   multiplayer.onStateUpdated = (state) => {
-    console.log('[Main] Received state_update:', { possession: state.possession, ballPos: state.ball?.pos, hasPlayers: !!state.players });
-
-    if (!game) {
-      console.error('[Main] Game not initialized yet!');
-      return;
-    }
-
-    if (!state.players) {
-      console.error('[Main] State has no players!');
+    if (!game || !state || !state.players) {
       return;
     }
 
     try {
-      // Sincronizar estado de possessão e física
+      // Sincronizar estado de possessão (do servidor)
       game.possession = state.possession;
       game.touches = state.touches;
       game.locked = state.locked;
 
-      // Construir array de body states para aplicar ao game
+      // Construir array de body states para SINCRONIZAR FÍSICA com servidor
       const bodyStates = [];
 
       // Adicionar estado da bola
       if (state.ball && state.ball.pos) {
-        console.log('[Main] Adding ball state:', state.ball.pos);
         bodyStates.push({
           id: 'ball',
           pos: state.ball.pos,
           vel: state.ball.vel || { x: 0, y: 0, z: 0 },
           quat: state.ball.quat || { x: 0, y: 0, z: 0, w: 1 }
         });
-      } else {
-        console.warn('[Main] No ball in state!');
       }
 
-      // Adicionar estado dos jogadores
-      // Nota: players[0-10] = amarelo, players[11-21] = azul
+      // Adicionar estado dos jogadores (global indices: 0-10 yellow, 11-21 blue)
       let playerGlobalIdx = 0;
       for (const team of ['yellow', 'blue']) {
         if (state.players[team]) {
@@ -200,9 +197,7 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
         }
       }
 
-      console.log('[Main] Applying body states:', bodyStates.length, 'bodies');
-
-      // Aplicar estados da física para sincronizar com servidor
+      // Aplicar TODOS os estados da física (bola + jogadores) sincronizando com servidor
       if (bodyStates.length > 0) {
         game.applyBodyStates(bodyStates, true);
       }

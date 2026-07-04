@@ -275,12 +275,19 @@ export class InputHandler {
 
     const impulse = { x: dir.x * impulseMag, y: 0, z: dir.z * impulseMag };
 
-    piece.physBody.velocity.set(0, 0, 0);
-    piece.physBody.applyImpulse(
-      new CANNON.Vec3(impulse.x, impulse.y, impulse.z),
-      piece.physBody.position
-    );
-
-    this.rules.onShotFired(piece, impulse);
+    // In multiplayer: DO NOT apply impulse locally, server is authority
+    // The server will receive shot_fired and apply it to its physics simulation
+    if (this.multiplayer && this.multiplayer.isActive) {
+      // Multiplayer: send to server only
+      this.rules.onShotFired(piece, impulse);
+    } else {
+      // Local mode: apply physics locally
+      piece.physBody.velocity.set(0, 0, 0);
+      piece.physBody.applyImpulse(
+        new CANNON.Vec3(impulse.x, impulse.y, impulse.z),
+        piece.physBody.position
+      );
+      this.rules.onShotFired(piece, impulse);
+    }
   }
 }
