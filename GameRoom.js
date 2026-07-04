@@ -262,9 +262,13 @@ export class GameRoom {
     if (this.tickCounter % 10 === 0) {
       const ballY = this.gameState.ball.physBody.position.y;
       const ballVelY = this.gameState.ball.physBody.velocity.y;
-      console.log(`[Ball] tick=${this.tickCounter}, y=${ballY.toFixed(2)}, velY=${ballVelY.toFixed(3)}`);
-      if (ballY < -100) {
-        console.warn(`[Ball] ⚠️ FALLING INFINITELY! y=${ballY}`);
+      const onGround = ballY <= BALL_RADIUS * 1.15;
+      console.log(`[Ball] tick=${this.tickCounter}, y=${ballY.toFixed(2)}, velY=${ballVelY.toFixed(3)}, onGround=${onGround}`);
+
+      // Quando a bola passa por y=0 (floor top), verificar colisão
+      if (ballY < 0 && this.tickCounter < 100) {
+        console.warn(`[Ball] ⚠️ Ball at y=${ballY.toFixed(2)} but NO COLLISION! Should have hit floor at y=0!`);
+        console.warn(`[Ball] Floor should be at y=-1 (position) to y=0 (top surface)`);
       }
     }
 
@@ -422,6 +426,12 @@ export class GameRoom {
     this.createBodies();
 
     console.log(`[Physics] ${this.roomCode}: 23 bodies criados (11+11+1) - Usando física do cliente`);
+    console.log(`[Physics] Total bodies in world: ${this.gameState.physics.bodies.length}`);
+
+    // Debug: Listar todos os bodies
+    this.gameState.physics.bodies.forEach((body, idx) => {
+      console.log(`  [Body ${idx}] group=${body.collisionFilterGroup}, mask=${body.collisionFilterMask}, mass=${body.mass}, pos.y=${body.position.y.toFixed(2)}`);
+    });
   }
 
   // ==========================================
