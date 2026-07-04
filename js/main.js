@@ -139,28 +139,43 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   // Sincronizar estado do jogo com updates do servidor
   multiplayer.onStateUpdated = (state) => {
     if (game && state.players) {
-      // Atualizar posições dos jogadores remotos (não controlados por este player)
-      const isMyTurnToControl = multiplayer.isMyTurn || !state.canInteract[multiplayer.myTeam];
+      // Sincronizar estado de possessão e física
+      game.possession = state.possession;
+      game.touches = state.touches;
+      game.locked = state.locked;
 
+      // Construir array de body states para aplicar ao game
+      const bodyStates = [];
+
+      // Adicionar estado da bola
+      if (state.ball && state.ball.pos) {
+        bodyStates.push({
+          id: 'ball',
+          pos: state.ball.pos,
+          vel: state.ball.vel || { x: 0, y: 0, z: 0 }
+        });
+      }
+
+      // Adicionar estado dos jogadores
       for (const team of ['yellow', 'blue']) {
-        for (let i = 0; i < Math.min(players.length / 2, state.players[team].length); i++) {
-          const player = players.find(p => p.team === team && p.idx === i);
-          if (player) {
+        if (state.players[team]) {
+          for (let i = 0; i < state.players[team].length; i++) {
             const statePlayer = state.players[team][i];
-            // Sincronizar posição do jogador remoto
             if (statePlayer && statePlayer.pos) {
-              player.group.position.set(statePlayer.pos.x, statePlayer.pos.y, statePlayer.pos.z);
-              if (statePlayer.quat) {
-                player.group.quaternion.set(statePlayer.quat.x, statePlayer.quat.y, statePlayer.quat.z, statePlayer.quat.w);
-              }
+              bodyStates.push({
+                id: `player_${i}`,
+                pos: statePlayer.pos,
+                vel: statePlayer.vel || { x: 0, y: 0, z: 0 },
+                quat: statePlayer.quat
+              });
             }
           }
         }
       }
 
-      // Sincronizar posição da bola
-      if (ball && state.ball && state.ball.pos) {
-        ball.group.position.set(state.ball.pos.x, state.ball.pos.y, state.ball.pos.z);
+      // Aplicar estados da física para sincronizar com servidor
+      if (bodyStates.length > 0) {
+        game.applyBodyStates(bodyStates, true);
       }
 
       // Atualizar HUD com estado do servidor
