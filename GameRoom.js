@@ -12,7 +12,6 @@ import * as CANNON from 'cannon-es';
 const TICK_RATE = 60; // Hz
 const TICK_DELTA = 1 / TICK_RATE; // 0.0167s
 const MAX_IMPULSE = 100; // Newton·segundo
-const GRAVITY = -80;
 
 // Dimensões do campo (escalado em metros)
 const FIELD_WIDTH = 105;
@@ -135,6 +134,48 @@ export class GameRoom {
   }
 
   /**
+   * Aplicar física EXATAMENTE como o cliente (physics.js)
+   */
+  _applyPhysicsStep() {
+    const PHYS = {
+      SPHERE_GRAVITY: -45,
+      CUBE_GRAVITY: -45,
+      BALL_GROUND_DAMPING: 0.82,
+      BALL_LIN_DAMPING: 0.2,
+      BALL_ANG_DAMPING: 0.15,
+      FIXED_DT: 1 / 240,  // ← CRÍTICO: 1/240, não outro valor!
+    };
+
+    // Aplicar gravidade MANUALMENTE apenas à bola (como cliente faz)
+    const ball = this.gameState.ball;
+    if (ball && ball.physBody) {
+      // Adiciona gravidade manualmente ao força da bola
+      const gravity = PHYS.SPHERE_GRAVITY;  // ou CUBE_GRAVITY se for cubo
+      ball.physBody.force.y += ball.physBody.mass * gravity;
+
+      // Damping dinâmico baseado se está no chão ou no ar
+      const ballRadius = 0.5;  // BALL_RADIUS
+      const onGround = ball.physBody.position.y <= ballRadius * 1.15;
+      ball.physBody.linearDamping = onGround ? PHYS.BALL_GROUND_DAMPING : PHYS.BALL_LIN_DAMPING;
+      ball.physBody.angularDamping = PHYS.BALL_ANG_DAMPING;
+
+      // Spin calculado dinamicamente (rolling without slipping)
+      const speed = Math.hypot(ball.physBody.velocity.x, ball.physBody.velocity.z);
+      if (speed > 0.05) {
+        const r = ballRadius;
+        ball.physBody.angularVelocity.set(
+          ball.physBody.velocity.z / r,
+          0,
+          -ball.physBody.velocity.x / r
+        );
+      }
+    }
+
+    // Rodar física com FIXED_DT (1/240)
+    this.gameState.physics.step(PHYS.FIXED_DT);
+  }
+
+  /**
    * Parar a sala
    */
   stop() {
@@ -182,7 +223,8 @@ export class GameRoom {
     }
 
     // ===== FASE 3: FÍSICA =====
-    this.gameState.physics.step(TICK_DELTA, deltaTime, 3);
+    // Aplicar física EXATAMENTE como o cliente (physics.js step())
+    this._applyPhysicsStep();
 
     // ===== FASE 4: SINCRONIZAR (Passo 9) =====
     this.syncPhysicsToState();
@@ -293,20 +335,19 @@ export class GameRoom {
   // PASSO 6: SETUP CANNON.JS
   // ==========================================
   initializePhysics() {
-    console.log(`[Physics] ${this.roomCode}: Inicializando Cannon.js`);
+    console.log(`[Physics] ${this.roomCode}: Inicializando Cannon.js (CLIENT PHYSICS)`);
 
-    // Criar mundo físico
+    // Criar mundo físico - EXATAMENTE como no cliente (physics.js)
     this.gameState.physics = new CANNON.World();
-    this.gameState.physics.gravity.set(0, GRAVITY, 0);
-    this.gameState.physics.defaultContactMaterial.friction = 0.6;
-    this.gameState.physics.defaultContactMaterial.restitution = 0.2;
+    this.gameState.physics.gravity.set(0, 0, 0);                    // Gravidade global = 0 (cliente faz assim)
+    this.gameState.physics.broadphase = new CANNON.SAPBroadphase(this.gameState.physics);
+    this.gameState.physics.solver.iterations = 12;                 // Mesmo do cliente
 
-    // Criar materiais
+    // Criar materiais - mesmos do cliente
     const matPiece = new CANNON.Material('piece');
-    const matBall = new CANNON.Material('ball');
     const matFloor = new CANNON.Material('floor');
 
-    // Contact materials
+    // Contact materials - EXATAMENTE como no cliente
     this.gameState.physics.addContactMaterial(
       new CANNON.ContactMaterial(matPiece, matPiece, {
         friction: 0.6,
@@ -315,20 +356,19 @@ export class GameRoom {
     );
 
     this.gameState.physics.addContactMaterial(
-      new CANNON.ContactMaterial(matBall, matFloor, {
+      new CANNON.ContactMaterial(matPiece, matFloor, {
         friction: 2.0,
         restitution: 0.65
       })
     );
 
     this.matPiece = matPiece;
-    this.matBall = matBall;
     this.matFloor = matFloor;
 
-    // PASSO 7: CRIAR BODIES
+    // Criar bodies dos players e bola
     this.createBodies();
 
-    console.log(`[Physics] ${this.roomCode}: 23 bodies criados (11+11+1)`);
+    console.log(`[Physics] ${this.roomCode}: 23 bodies criados (11+11+1) - Usando física do cliente`);
   }
 
   // ==========================================
