@@ -90,12 +90,10 @@ function syncMeshes() {
       if (serverState) {
         // Misturar posição do servidor com previsão local
         const interpolated = interpolationMgr.lerpPosition(serverState.pos, p.physBody.position, alpha);
-        p.group.position.x = interpolated.x;
-        p.group.position.z = interpolated.z;
+        p.group.position.copy(interpolated);
       } else {
         // Sem dados do servidor ainda, usar previsão local
-        p.group.position.x = p.physBody.position.x;
-        p.group.position.z = p.physBody.position.z;
+        p.group.position.copy(p.physBody.position);
       }
     });
 
@@ -141,17 +139,18 @@ function animate(now) {
   lastFrameTime = now;
   frameTime = Math.min(frameTime, 0.1);   // clamp huge gaps (tab switch, etc.)
 
-  // MULTIPLAYER: Server is sole authority for physics
-  // Client NEVER runs physics.step() in multiplayer — only sync meshes from server state
+  // MULTIPLAYER: Server Authority + Client Prediction
+  // Client ALWAYS runs physics for local prediction
+  // Server state is used for correction/interpolation
   const isMultiplayer = multiplayerUI && gameMode === 'multiplayer';
 
-  if (!isMultiplayer) {
-    // Local mode: run physics normally
-    accumulator += frameTime;
-    while (accumulator >= PHYS.FIXED_DT) {
-      physics.step();
-      accumulator -= PHYS.FIXED_DT;
-    }
+  // Run physics in both local and multiplayer modes
+  // In multiplayer: this is CLIENT PREDICTION (used for smooth interpolation)
+  // In local: this is the only physics simulation
+  accumulator += frameTime;
+  while (accumulator >= PHYS.FIXED_DT) {
+    physics.step();
+    accumulator -= PHYS.FIXED_DT;
   }
 
   syncMeshes();
