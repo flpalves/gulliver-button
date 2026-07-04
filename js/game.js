@@ -166,6 +166,14 @@ export class Game {
   }
 
   onShotFired(piece, impulse = null) {
+    console.log('[Game] onShotFired called:', {
+      hasPiece: !!piece,
+      hasImpulse: !!impulse,
+      isMultiplayer: !!this.multiplayer,
+      isActive: this.multiplayer?.isActive,
+      impulseValue: impulse
+    });
+
     this._stopTurnTimer();
     this.locked = true;
     this.shooter = piece;
@@ -176,9 +184,16 @@ export class Game {
 
     // Multiplayer: emit shot to server
     if (this.multiplayer && this.multiplayer.isActive && impulse) {
+      console.log('[Game] ✅ Emitting shot to server...');
       const bodyStates = this._captureBodyStates();
       const playerIdx = this.players.indexOf(piece);
       this.multiplayer.emitShotFired(playerIdx, impulse, bodyStates);
+    } else {
+      console.log('[Game] ❌ Not emitting:', {
+        hasMultiplayer: !!this.multiplayer,
+        isActive: this.multiplayer?.isActive,
+        hasImpulse: !!impulse
+      });
     }
 
     this._setStatus('Resolvendo jogada...');
