@@ -145,6 +145,7 @@ export class GameRoom {
     const floor = new CANNON.Body({ mass: 0, material: this.matFloor });
     const floorShape = new CANNON.Box(new CANNON.Vec3(floorHalfX, floorHalfH, floorHalfZ));
     floor.addShape(floorShape);
+    floor.updateMassProperties();  // Recalcular propriedades após adicionar forma
 
     // Posiciona o topo da caixa em y=0 (o centro fica em -floorHalfH)
     floor.position.set(0, -floorHalfH, 0);
@@ -153,6 +154,14 @@ export class GameRoom {
     floor.collisionFilterGroup = 8;  // GROUP.BALL_WALL
     floor.collisionFilterMask = 2;   // GROUP.BALL
     this.gameState.physics.addBody(floor);
+
+    // Adicionar listener de colisão no floor também (para debug)
+    floor.addEventListener('collide', (e) => {
+      console.log(`[Floor Collision] Colidiu com body group=${e.body.collisionFilterGroup}`);
+      if (e.body.collisionFilterGroup === 2) {
+        console.log(`[Floor Collision] ✅ BALL HIT FLOOR!`);
+      }
+    });
 
     console.log(`[Physics] Floor criado (BOX gigante): pos=${floor.position.y}, size=(${2*floorHalfX}x${2*floorHalfH}x${2*floorHalfZ}), groups: ${floor.collisionFilterGroup}, mask: ${floor.collisionFilterMask}`);
   }
@@ -270,7 +279,7 @@ export class GameRoom {
       // Quando a bola passa por y=0 (floor top), verificar colisão
       if (ballY < 0 && this.tickCounter < 100) {
         console.warn(`[Ball] ⚠️ Ball at y=${ballY.toFixed(2)} but NO COLLISION! Should have hit floor at y=0!`);
-        console.warn(`[Ball] Floor should be at y=-1 (position) to y=0 (top surface)`);
+        console.warn(`[Ball] Floor is at y=-0.5 (position), extends to y=0 (top surface)`);
       }
     }
 
@@ -397,6 +406,9 @@ export class GameRoom {
     this.gameState.physics.gravity.set(0, 0, 0);                    // Gravidade global = 0 (cliente faz assim)
     this.gameState.physics.broadphase = new CANNON.SAPBroadphase(this.gameState.physics);
     this.gameState.physics.solver.iterations = 12;                 // Mesmo do cliente
+    this.gameState.physics.defaultContactMaterial.friction = 0.6;
+    this.gameState.physics.defaultContactMaterial.restitution = 0.2;
+    this.gameState.physics.allowSleep = false;  // Desabilitar sleep para debug
 
     // Criar materiais - mesmos do cliente
     const matPiece = new CANNON.Material('piece');
