@@ -422,8 +422,17 @@ export class GameRoom {
       })
     );
 
+    // CRÍTICO: Registrar AMBAS as ordens para piece-floor
     this.gameState.physics.addContactMaterial(
       new CANNON.ContactMaterial(matPiece, matFloor, {
+        friction: 2.0,
+        restitution: 0.65
+      })
+    );
+
+    // Ordem inversa também (Cannon.js às vezes precisa)
+    this.gameState.physics.addContactMaterial(
+      new CANNON.ContactMaterial(matFloor, matPiece, {
         friction: 2.0,
         restitution: 0.65
       })
