@@ -1,291 +1,270 @@
-// Multiplayer Manager — handles Socket.io connection and relay
+/**
+ * js/multiplayer.js
+ * Gerenciador de conexão multiplayer do cliente
+ *
+ * Responsável por:
+ * - Passo 19: Conectar ao servidor via Socket.io
+ * - Passo 20: Receber state_update
+ * - Passo 21: Interpolar movimento visual
+ * - Passo 22: Enviar player_input
+ * - Passo 23: Sincronizar HUD
+ */
 
 export class MultiplayerManager {
   constructor() {
     this.socket = null;
     this.isActive = false;
-    this.myTeam = null; // 'yellow' or 'blue'
     this.roomCode = null;
-    this.isMyTurn = false;
-    this.isRoomCreator = false; // true if I created the room
-    this.gameInstance = null;
-    this.inputInstance = null;
-    this.serverGameState = null; // Game state from server
-
-    // Callbacks for game sync
-    this.onRemoteShotFired = null;
-    this.onPhysicsSettled = null;
-    this.onGameEvent = null;
+    this.myTeam = null;
+    this.isConnected = false;
+    this.isRoomCreator = false;
+    this.gameState = null;
+    this.previousState = null;
+    this.interpolationAlpha = 0;
+    this.lastStateTime = Date.now();
+    this.onStateUpdated = null;
+    this.onRoomReady = null;
     this.onOpponentDisconnected = null;
-    this.onRemoteTeamChanged = null;
-    this.onRemoteSettingsChanged = null;
-    this.onGameStateUpdated = null;
+    this.onError = null;
+    console.log('[Multiplayer] Manager inicializado');
   }
 
+  // PASSO 19: CONECTAR AO SERVIDOR
   connect(serverUrl = 'http://localhost:3000') {
-    return new Promise((resolve, reject) => {
-      try {
-        this.socket = io(serverUrl, {
-          reconnection: true,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          reconnectionAttempts: 5
-        });
+    console.log(`[Multiplayer] Conectando a ${serverUrl}...`);
+    if (typeof window.io === 'undefined') {
+      console.error('[Multiplayer] Socket.io não carregado');
+      if (this.onError) this.onError('Socket.io não disponível');
+      return;
+    }
+    this.socket = window.io(serverUrl, {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
+    this.setupEventListeners();
+  }
 
-        this.socket.on('connect', () => {
-          console.log('[Multiplayer] Connected to server');
+  setupEventListeners() {
+    this.socket.on('connect', () => {
+      this.isConnected = true;
+      console.log(`[Multiplayer] Conectado. ID: ${this.socket.id.substring(0, 8)}...`);
+    });
 
-          // If we have an active room, try to rejoin
-          if (this.roomCode && this.isActive) {
-            console.log('[Multiplayer] Attempting to rejoin room after reconnection...');
-            this.rejoinRoom();
-          }
+    this.socket.on('disconnect', () => {
+      this.isConnected = false;
+      this.isActive = false;
+      console.log('[Multiplayer] Desconectado');
+    });
 
-          resolve();
-        });
+    this.socket.on('room_created', (data) => {
+      this.roomCode = data.roomCode;
+      this.myTeam = 'yellow';
+      this.isRoomCreator = true;
+      console.log(`[Multiplayer] Sala criada: ${this.roomCode}`);
+      this._dispatch('roomCreated', { roomCode: data.roomCode, myTeam: this.myTeam });
+    });
 
-        this.socket.on('connect_error', (error) => {
-          console.error('[Multiplayer] Connection error:', error);
-          reject(error);
-        });
+    this.socket.on('room_ready', (data) => {
+      this.isActive = true;
+      this.myTeam = data.myTeam || this.myTeam;
+      this.roomCode = data.roomCode;
+      console.log(`[Multiplayer] Sala pronta! Time: ${this.myTeam}`);
+      if (this.onRoomReady) this.onRoomReady(data);
+      this._dispatch('roomReady', data);
+    });
 
-        this.socket.on('room_created', (data) => {
-          console.log('[Multiplayer] Room created:', data.roomCode);
-          this.roomCode = data.roomCode;
-          this.myTeam = 'yellow';
-          this.isRoomCreator = true;
-          this.isMyTurn = true;
-          this._dispatch('roomCreated', { roomCode: data.roomCode, myTeam: this.myTeam });
-        });
+    // PASSO 20: Receber state_update
+    this.socket.on('state_update', (state) => {
+      this.previousState = this.gameState;
+      this.gameState = state;
+      this.lastStateTime = Date.now();
+      this.interpolationAlpha = 0;
+      if (this.onStateUpdated) this.onStateUpdated(state);
+    });
 
-        this.socket.on('room_ready', (data) => {
-          console.log('[Multiplayer] Room ready:', data);
-          // Blue player's socket already knows their team from join, but we set isMyTurn to false
-          if (this.socket.id === data.blueSocketId) {
-            this.isMyTurn = false;
-          }
-          this._dispatch('roomReady', data);
-        });
+    this.socket.on('opponent_disconnected', () => {
+      this.isActive = false;
+      console.log('[Multiplayer] Oponente desconectou');
+      if (this.onOpponentDisconnected) this.onOpponentDisconnected();
+      this._dispatch('opponentDisconnected', {});
+    });
 
-        this.socket.on('join_error', (data) => {
-          console.error('[Multiplayer] Join error:', data.message);
-          this._dispatch('joinError', data);
-        });
+    this.socket.on('team_changed', (payload) => {
+      console.log('[Multiplayer] 🔔 RECEIVED team_changed:', payload);
+      this._dispatch('teamChanged', payload);
+    });
 
-        this.socket.on('shot_fired', (payload) => {
-          if (this.onRemoteShotFired) {
-            this.onRemoteShotFired(payload);
-          }
-        });
+    this.socket.on('settings_changed', (payload) => {
+      console.log('[Multiplayer] 🔔 RECEIVED settings_changed:', payload);
+      this._dispatch('settingsChanged', payload);
+    });
 
-        this.socket.on('reposition', (payload) => {
-          // For future: handle remote reposition
-        });
+    this.socket.on('join_error', (data) => {
+      console.error('[Multiplayer] Join error:', data.message);
+      this._dispatch('joinError', data);
+    });
 
-        this.socket.on('physics_settled', (payload) => {
-          if (this.onPhysicsSettled) {
-            this.onPhysicsSettled(payload);
-          }
-        });
+    this.socket.on('settings_error', (data) => {
+      console.error('[Multiplayer] Settings error:', data.message);
+      this._dispatch('settingsError', data);
+    });
 
-        this.socket.on('game_event', (payload) => {
-          if (this.onGameEvent) {
-            this.onGameEvent(payload);
-          }
-        });
+    this.socket.on('both_players_ready', (data) => {
+      console.log('[Multiplayer] 🚀 Both players ready! Game starting...');
+      this._dispatch('bothPlayersReady', data);
+    });
 
-        this.socket.on('opponent_disconnected', (data) => {
-          console.log('[Multiplayer] Opponent disconnected:', data);
-          if (this.onOpponentDisconnected) {
-            this.onOpponentDisconnected(data);
-          }
-          this._dispatch('opponentDisconnected', data);
-        });
-
-        this.socket.on('opponent_reconnected', (data) => {
-          console.log('[Multiplayer] Opponent reconnected:', data);
-          // Reset game state on reconnection
-          this.serverGameState = data.gameState;
-          this._dispatch('opponentReconnected', data);
-        });
-
-        this.socket.on('opponent_reconnect_timeout', (data) => {
-          console.log('[Multiplayer] Opponent timeout - room closing');
-          this._dispatch('opponentReconnectTimeout', data);
-        });
-
-        this.socket.on('team_changed', (payload) => {
-          console.log('[Multiplayer] 🔔 RECEIVED team_changed:', payload);
-          if (this.onRemoteTeamChanged) {
-            console.log('[Multiplayer] Calling onRemoteTeamChanged callback');
-            this.onRemoteTeamChanged(payload);
-          }
-          console.log('[Multiplayer] Dispatching multiplayer:teamChanged event');
-          this._dispatch('teamChanged', payload);
-        });
-
-        this.socket.on('settings_changed', (payload) => {
-          console.log('[Multiplayer] 🔔 RECEIVED settings_changed:', payload);
-          if (this.onRemoteSettingsChanged) {
-            console.log('[Multiplayer] Calling onRemoteSettingsChanged callback');
-            this.onRemoteSettingsChanged(payload);
-          }
-          console.log('[Multiplayer] Dispatching multiplayer:settingsChanged event');
-          this._dispatch('settingsChanged', payload);
-        });
-
-        this.socket.on('settings_error', (data) => {
-          console.error('[Multiplayer] Settings error:', data.message);
-          this._dispatch('settingsError', data);
-        });
-
-        this.socket.on('both_players_ready', (data) => {
-          console.log('[Multiplayer] 🚀 Both players ready! Game starting...');
-          this._dispatch('bothPlayersReady', data);
-        });
-
-        this.socket.on('game_state', (data) => {
-          console.log('[Multiplayer] 📊 Game state updated:', data);
-          this.serverGameState = data.gameState;
-          this.isMyTurn = data.isMyTurn;
-          if (this.onGameStateUpdated) {
-            this.onGameStateUpdated(data);
-          }
-          this._dispatch('gameStateUpdated', data);
-        });
-
-        this.socket.on('disconnect', (reason) => {
-          console.log('[Multiplayer] Disconnected from server:', reason);
-
-          // If not intentional disconnection, try to reconnect
-          if (reason !== 'io client namespace disconnect' && this.roomCode && this.isActive) {
-            console.log('[Multiplayer] Unintentional disconnect - scheduling reconnection attempt');
-            // Try to reconnect after 2 seconds
-            setTimeout(() => {
-              if (this.socket && !this.socket.connected) {
-                console.log('[Multiplayer] Reconnecting to server...');
-                this.socket.connect();
-              }
-            }, 2000);
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
+    this.socket.on('error', (data) => {
+      console.error('[Multiplayer] Erro:', data.message);
+      if (this.onError) this.onError(data.message);
     });
   }
 
   createRoom(gameConfig) {
-    if (!this.socket) {
-      console.error('[Multiplayer] Not connected');
-      return;
-    }
-    this.isActive = true;
-    this.socket.emit('create_room', gameConfig);
+    if (!this.isConnected) return;
+    this.socket.emit('create_room', { gameConfig });
   }
 
   joinRoom(roomCode) {
-    if (!this.socket) {
-      console.error('[Multiplayer] Not connected');
-      return;
-    }
-    this.isActive = true;
-    this.roomCode = roomCode;
-    this.myTeam = 'blue';
+    if (!this.isConnected) return;
     this.socket.emit('join_room', roomCode);
   }
 
-  emitShotFired(playerIdx, impulse, bodyStates) {
-    if (!this.socket || !this.isActive) return;
-    this.socket.emit('shot_fired', {
+  // PASSO 22: ENVIAR PLAYER INPUT
+  sendPlayerInput(playerIdx, directionX, directionZ, intensity) {
+    if (!this.isActive || !this.socket) return;
+
+    const dirMag = Math.sqrt(directionX ** 2 + directionZ ** 2);
+    if (dirMag === 0) return;
+
+    const normX = directionX / dirMag;
+    const normZ = directionZ / dirMag;
+    const clampedIntensity = Math.max(0, Math.min(intensity, 1.0));
+
+    this.socket.emit('player_input', {
       playerIdx,
-      team: this.myTeam,
-      impulse,
-      bodyStates,
+      directionX: normX,
+      directionZ: normZ,
+      intensity: clampedIntensity,
       timestamp: Date.now()
     });
   }
 
-  emitPhysicsSettled(bodyStates, lastTouchTeam, playerIdx) {
-    if (!this.socket || !this.isActive) return;
-    this.socket.emit('physics_settled', {
-      bodyStates,
-      lastTouchTeam,
-      playerIdx,
-      timestamp: Date.now()
-    });
-  }
+  // PASSO 20: Getters para estado remoto
+  getPlayerPosition(team, playerIdx) {
+    if (!this.gameState?.players) return null;
 
-  emitGameEvent(type, data) {
-    if (!this.socket || !this.isActive) return;
-    this.socket.emit('game_event', {
-      type,
-      data,
-      team: this.myTeam,
-      timestamp: Date.now()
-    });
-  }
+    const currentPlayer = this.gameState.players[team][playerIdx];
+    if (!currentPlayer) return null;
 
-  emitTeamChanged(team1, team2) {
-    if (!this.socket || !this.isActive) {
-      console.warn('[Multiplayer] Cannot emit team_changed: socket not ready', { active: this.isActive, socketExists: !!this.socket });
-      return;
+    if (this.previousState?.players[team][playerIdx]) {
+      const prevPlayer = this.previousState.players[team][playerIdx];
+      const alpha = this.interpolationAlpha;
+
+      return {
+        x: prevPlayer.pos.x + (currentPlayer.pos.x - prevPlayer.pos.x) * alpha,
+        y: currentPlayer.pos.y,
+        z: prevPlayer.pos.z + (currentPlayer.pos.z - prevPlayer.pos.z) * alpha
+      };
     }
-    console.log('[Multiplayer] Emitting team_changed:', { team1, team2 });
-    this.socket.emit('team_changed', {
-      team1,
-      team2,
-      timestamp: Date.now()
-    });
+
+    return currentPlayer.pos;
+  }
+
+  getBallPosition() {
+    if (!this.gameState?.ball) return null;
+
+    const currentBall = this.gameState.ball;
+
+    if (this.previousState?.ball) {
+      const prevBall = this.previousState.ball;
+      const alpha = this.interpolationAlpha;
+
+      return {
+        x: prevBall.pos.x + (currentBall.pos.x - prevBall.pos.x) * alpha,
+        y: prevBall.pos.y + (currentBall.pos.y - prevBall.pos.y) * alpha,
+        z: prevBall.pos.z + (currentBall.pos.z - prevBall.pos.z) * alpha
+      };
+    }
+
+    return currentBall.pos;
+  }
+
+  canDragPiece(team, playerIdx) {
+    if (!this.isActive || !this.gameState) return false;
+    if (team !== this.myTeam) return false;
+    if (this.gameState.possession !== this.myTeam) return false;
+    if (this.gameState.canInteract && !this.gameState.canInteract[this.myTeam]) return false;
+    return true;
+  }
+
+  // PASSO 23: SINCRONIZAR HUD
+  getHUDData() {
+    if (!this.gameState) return null;
+
+    return {
+      scores: this.gameState.scores,
+      possession: this.gameState.possession,
+      touches: this.gameState.touches,
+      maxTouches: this.gameState.maxTouches || 4,
+      half: this.gameState.half,
+      timeLeft: this.gameState.timeLeft,
+      gameStatus: this.gameState.gameStatus,
+      myTeam: this.myTeam,
+      ping: this.calculatePing()
+    };
+  }
+
+  calculatePing() {
+    if (!this.gameState) return 0;
+    const latency = Date.now() - this.gameState.timestamp;
+    return Math.max(0, latency);
+  }
+
+  getSyncInfo() {
+    return {
+      isActive: this.isActive,
+      isConnected: this.isConnected,
+      roomCode: this.roomCode,
+      myTeam: this.myTeam,
+      tick: this.gameState?.tick || 0,
+      stateAge: Date.now() - this.lastStateTime
+    };
+  }
+
+  emitTeamChanged(team1Id, team2Id) {
+    if (!this.isConnected || !this.socket) return;
+    this.socket.emit('team_changed', { team1: team1Id, team2: team2Id });
+    console.log('[Multiplayer] Emitted team_changed:', { team1: team1Id, team2: team2Id });
   }
 
   emitSettingsChanged(gameConfig) {
-    if (!this.socket || !this.isActive) {
-      console.warn('[Multiplayer] Cannot emit settings_changed: socket not ready', { active: this.isActive, socketExists: !!this.socket });
-      return;
-    }
-    console.log('[Multiplayer] Emitting settings_changed:', gameConfig);
-    this.socket.emit('settings_changed', {
-      gameConfig,
-      timestamp: Date.now()
-    });
+    if (!this.isConnected || !this.socket) return;
+    this.socket.emit('settings_changed', { gameConfig });
+    console.log('[Multiplayer] Emitted settings_changed:', gameConfig);
   }
 
   emitPlayerReady() {
-    if (!this.socket || !this.isActive) {
-      console.warn('[Multiplayer] Cannot emit player_ready: socket not ready', { active: this.isActive, socketExists: !!this.socket });
-      return;
-    }
-    console.log('[Multiplayer] 🎮 Emitting player_ready');
-    this.socket.emit('player_ready', {
-      team: this.myTeam,
-      timestamp: Date.now()
-    });
+    if (!this.isConnected || !this.socket) return;
+    this.socket.emit('player_ready', {});
+    console.log('[Multiplayer] Emitted player_ready');
   }
 
-  // isMyTurn is now controlled by the server via game_state events
-
-  rejoinRoom() {
-    if (!this.socket || !this.roomCode) {
-      console.warn('[Multiplayer] Cannot rejoin: socket not ready or no roomCode');
-      return;
-    }
-    console.log('[Multiplayer] Attempting to rejoin room:', this.roomCode);
-    this.socket.emit('rejoin_room', this.roomCode);
+  _dispatch(eventName, detail) {
+    const event = new CustomEvent(`multiplayer:${eventName}`, { detail });
+    window.dispatchEvent(event);
   }
 
   disconnect() {
     if (this.socket) {
       this.socket.disconnect();
       this.isActive = false;
+      this.isConnected = false;
+      console.log('[Multiplayer] Desconectado');
     }
-  }
-
-  // Simple event dispatcher for UI updates
-  _dispatch(eventName, data) {
-    window.dispatchEvent(new CustomEvent(`multiplayer:${eventName}`, { detail: data }));
   }
 }
 
-// Global instance
-export let multiplayer = new MultiplayerManager();
+export const multiplayer = new MultiplayerManager();
