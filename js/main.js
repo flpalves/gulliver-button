@@ -166,14 +166,22 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   // Sincronizar estado do jogo com updates do servidor
   multiplayer.onStateUpdated = (state) => {
     console.log('[Main] onStateUpdated received:', {
+      hasGame: !!game,
+      hasState: !!state,
+      hasPlayers: !!state?.players,
       possession: state?.possession,
       ballPos: state?.ball?.pos,
       yellowPlayers: state?.players?.yellow?.length,
       bluePlayers: state?.players?.blue?.length
     });
 
-    if (!game || !state || !state.players) {
-      console.warn('[Main] onStateUpdated: missing game or state', { hasGame: !!game, hasState: !!state, hasPlayers: !!state?.players });
+    if (!game) {
+      console.warn('[Main] ❌ Game not initialized yet!');
+      return;
+    }
+
+    if (!state || !state.players) {
+      console.warn('[Main] ❌ Missing state or players:', { hasState: !!state, hasPlayers: !!state?.players });
       return;
     }
 
