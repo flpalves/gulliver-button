@@ -134,6 +134,26 @@ export class GameRoom {
   }
 
   /**
+   * Criar o piso (floor) - CRÍTICO para a bola não cair infinitamente!
+   * Exatamente como em physics.js _buildWalls()
+   */
+  _buildFloor() {
+    const FLOOR_MARGIN = 80;
+    const floorHalfH = 1;
+    const floor = new CANNON.Body({ mass: 0, material: this.matFloor });
+    floor.addShape(new CANNON.Box(new CANNON.Vec3(
+      FIELD_WIDTH / 2 + FLOOR_MARGIN,
+      floorHalfH,
+      FIELD_HEIGHT / 2 + FLOOR_MARGIN
+    )));
+    floor.position.set(0, -floorHalfH, 0);
+    // Collision mask: apenas a bola pode colidir com o piso
+    floor.collisionFilterGroup = 8;  // GROUP.BALL_WALL
+    floor.collisionFilterMask = 2;   // GROUP.BALL
+    this.gameState.physics.addBody(floor);
+  }
+
+  /**
    * Aplicar física EXATAMENTE como o cliente (physics.js)
    */
   _applyPhysicsStep() {
@@ -371,6 +391,10 @@ export class GameRoom {
 
     this.matPiece = matPiece;
     this.matFloor = matFloor;
+
+    // CRÍTICO: Criar o piso (floor) como no cliente
+    // Sem isso, a bola cai infinitamente!
+    this._buildFloor();
 
     // Criar bodies dos players e bola
     this.createBodies();
