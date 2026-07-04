@@ -103,13 +103,26 @@ export class MultiplayerManager {
 
     // PASSO 20: Receber state_update
     this.socket.on('state_update', (state) => {
+      console.log('[Multiplayer] Received state_update from server:', {
+        ballPos: state?.ball?.pos,
+        possession: state?.possession,
+        yellowPlayers: state?.players?.yellow?.length,
+        bluePlayers: state?.players?.blue?.length
+      });
+
       this.previousState = this.gameState;
       this.gameState = state;
       this.lastStateTime = Date.now();
       this.interpolationAlpha = 0;
       // Atualizar se é minha vez
       this.isMyTurn = state.possession === this.myTeam;
-      if (this.onStateUpdated) this.onStateUpdated(state);
+
+      if (this.onStateUpdated) {
+        console.log('[Multiplayer] Calling onStateUpdated callback');
+        this.onStateUpdated(state);
+      } else {
+        console.warn('[Multiplayer] No onStateUpdated callback set!');
+      }
     });
 
     this.socket.on('opponent_disconnected', () => {

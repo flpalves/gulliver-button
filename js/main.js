@@ -155,7 +155,15 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
 
   // Sincronizar estado do jogo com updates do servidor
   multiplayer.onStateUpdated = (state) => {
+    console.log('[Main] onStateUpdated received:', {
+      possession: state?.possession,
+      ballPos: state?.ball?.pos,
+      yellowPlayers: state?.players?.yellow?.length,
+      bluePlayers: state?.players?.blue?.length
+    });
+
     if (!game || !state || !state.players) {
+      console.warn('[Main] onStateUpdated: missing game or state', { hasGame: !!game, hasState: !!state, hasPlayers: !!state?.players });
       return;
     }
 
@@ -176,6 +184,8 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
           vel: state.ball.vel || { x: 0, y: 0, z: 0 },
           quat: state.ball.quat || { x: 0, y: 0, z: 0, w: 1 }
         });
+      } else {
+        console.warn('[Main] No ball in state!');
       }
 
       // Adicionar estado dos jogadores (global indices: 0-10 yellow, 11-21 blue)
@@ -197,9 +207,13 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
         }
       }
 
+      console.log('[Main] Built bodyStates:', bodyStates.length, 'bodies');
+
       // Aplicar TODOS os estados da física (bola + jogadores) sincronizando com servidor
       if (bodyStates.length > 0) {
         game.applyBodyStates(bodyStates, true);
+      } else {
+        console.warn('[Main] No bodyStates to apply!');
       }
 
       // Atualizar HUD com estado do servidor

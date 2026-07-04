@@ -728,10 +728,16 @@ export class Game {
   }
 
   applyBodyStates(states, syncVelocity = true) {
-    if (!states || !Array.isArray(states)) return;
+    if (!states || !Array.isArray(states)) {
+      console.warn('[Game] applyBodyStates: invalid states', states);
+      return;
+    }
+
+    console.log(`[Game] applyBodyStates: ${states.length} bodies`);
 
     states.forEach(state => {
       if (state.id === 'ball' && this.ball) {
+        console.log(`[Game] Ball pos: (${state.pos.x.toFixed(2)}, ${state.pos.y.toFixed(2)}, ${state.pos.z.toFixed(2)})`);
         this.ball.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
         if (syncVelocity) {
           this.ball.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
