@@ -121,6 +121,11 @@ export class Game {
 
   // ── Rules interface consumed by InputHandler ──
   canDrag(piece) {
+    // In multiplayer, only allow dragging your own team's pieces
+    if (this.multiplayer && this.multiplayer.isActive) {
+      if (piece.team !== this.multiplayer.myTeam) return false;
+    }
+
     // A piece that wandered off the field (no perimeter walls anymore) can
     // always be dragged back in by its own team, regardless of whose turn
     // it is or whether a shot is resolving.
