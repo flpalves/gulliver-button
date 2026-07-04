@@ -758,6 +758,7 @@ export class Game {
           this.ball.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
         }
         this.ball.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
+        this.ball.physBody.wakeUp();  // Force collision recalculation
       } else if (state.id.startsWith('player_')) {
         const idx = parseInt(state.id.split('_')[1]);
         const player = this.players[idx];
@@ -767,6 +768,7 @@ export class Game {
             player.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
           }
           player.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
+          player.physBody.wakeUp();  // Force collision recalculation
         }
       }
     });
