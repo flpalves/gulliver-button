@@ -135,21 +135,26 @@ export class GameRoom {
 
   /**
    * Criar o piso (floor) - CRÍTICO para a bola não cair infinitamente!
-   * Usando Plane infinito ao invés de Box (bug do Cannon.js com Box estático + Sphere)
+   * Usando Box MUITO grande e MUITO fino (Plane tem bug com Spheres)
    */
   _buildFloor() {
-    // Usar Plane infinito para evitar bug do Cannon.js
+    const floorHalfX = 500;  // Muito grande em X
+    const floorHalfZ = 500;  // Muito grande em Z
+    const floorHalfH = 0.5;  // Muito fino em Y
+
     const floor = new CANNON.Body({ mass: 0, material: this.matFloor });
-    const planeShape = new CANNON.Plane();
-    floor.addShape(planeShape);
-    floor.position.set(0, 0, 0);  // Plane está em y=0 (topo da mesa)
+    const floorShape = new CANNON.Box(new CANNON.Vec3(floorHalfX, floorHalfH, floorHalfZ));
+    floor.addShape(floorShape);
+
+    // Posiciona o topo da caixa em y=0 (o centro fica em -floorHalfH)
+    floor.position.set(0, -floorHalfH, 0);
 
     // Collision mask: apenas a bola pode colidir com o piso
     floor.collisionFilterGroup = 8;  // GROUP.BALL_WALL
     floor.collisionFilterMask = 2;   // GROUP.BALL
     this.gameState.physics.addBody(floor);
 
-    console.log(`[Physics] Floor criado (PLANE): pos=${floor.position.y}, groups: ${floor.collisionFilterGroup}, mask: ${floor.collisionFilterMask}`);
+    console.log(`[Physics] Floor criado (BOX gigante): pos=${floor.position.y}, size=(${2*floorHalfX}x${2*floorHalfH}x${2*floorHalfZ}), groups: ${floor.collisionFilterGroup}, mask: ${floor.collisionFilterMask}`);
   }
 
   /**
