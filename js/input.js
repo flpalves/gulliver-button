@@ -129,10 +129,28 @@ export class InputHandler {
 
   _onDown(e) {
     if (e.button !== 0 || this.dragging) return;
+
     // Block input if multiplayer and not my turn
-    if (this.multiplayer && this.multiplayer.isActive && !this.multiplayer.isMyTurn) return;
+    if (this.multiplayer && this.multiplayer.isActive) {
+      console.log('[Input] Multiplayer active. isMyTurn:', this.multiplayer.isMyTurn, 'myTeam:', this.multiplayer.myTeam);
+      if (!this.multiplayer.isMyTurn) {
+        console.log('[Input] Not my turn, blocking input');
+        return;
+      }
+    }
+
     const piece = this._pieceAt(e);
-    if (!piece || !this.rules.canDrag(piece)) return;
+    console.log('[Input] Piece at cursor:', piece?.team, piece?.playerIndex);
+
+    if (!piece) {
+      console.log('[Input] No piece at cursor');
+      return;
+    }
+
+    if (!this.rules.canDrag(piece)) {
+      console.log('[Input] Cannot drag piece:', piece.team, piece.playerIndex);
+      return;
+    }
 
     this.dragging = piece;
     this.dragMode = this.rules.isReposition(piece) ? 'reposition' : 'shot';

@@ -141,7 +141,19 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
 
   // Sincronizar estado do jogo com updates do servidor
   multiplayer.onStateUpdated = (state) => {
-    if (game && state.players) {
+    console.log('[Main] Received state_update:', { possession: state.possession, ballPos: state.ball?.pos, hasPlayers: !!state.players });
+
+    if (!game) {
+      console.error('[Main] Game not initialized yet!');
+      return;
+    }
+
+    if (!state.players) {
+      console.error('[Main] State has no players!');
+      return;
+    }
+
+    try {
       // Sincronizar estado de possessão e física
       game.possession = state.possession;
       game.touches = state.touches;
@@ -152,12 +164,15 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
 
       // Adicionar estado da bola
       if (state.ball && state.ball.pos) {
+        console.log('[Main] Adding ball state:', state.ball.pos);
         bodyStates.push({
           id: 'ball',
           pos: state.ball.pos,
           vel: state.ball.vel || { x: 0, y: 0, z: 0 },
           quat: state.ball.quat || { x: 0, y: 0, z: 0, w: 1 }
         });
+      } else {
+        console.warn('[Main] No ball in state!');
       }
 
       // Adicionar estado dos jogadores
@@ -180,6 +195,8 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
         }
       }
 
+      console.log('[Main] Applying body states:', bodyStates.length, 'bodies');
+
       // Aplicar estados da física para sincronizar com servidor
       if (bodyStates.length > 0) {
         game.applyBodyStates(bodyStates, true);
@@ -187,6 +204,8 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
 
       // Atualizar HUD com estado do servidor
       if (game._updateHUD) game._updateHUD();
+    } catch (error) {
+      console.error('[Main] Error in onStateUpdated:', error);
     }
   };
 
