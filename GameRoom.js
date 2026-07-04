@@ -415,6 +415,11 @@ export class GameRoom {
         material: this.matPiece
       });
       body.position.set(pos.x, PLAYER_RADIUS, pos.z);
+
+      // Collision filters - players colidem entre si e com a bola
+      body.collisionFilterGroup = 1;   // GROUP.PLAYER
+      body.collisionFilterMask = 1 | 2 | 16;  // PLAYER | BALL | FAR_WALL
+
       this.gameState.physics.addBody(body);
 
       return {
@@ -436,6 +441,11 @@ export class GameRoom {
         material: this.matPiece
       });
       body.position.set(pos.x, PLAYER_RADIUS, pos.z);
+
+      // Collision filters - players colidem entre si e com a bola
+      body.collisionFilterGroup = 1;   // GROUP.PLAYER
+      body.collisionFilterMask = 1 | 2 | 16;  // PLAYER | BALL | FAR_WALL
+
       this.gameState.physics.addBody(body);
 
       return {
@@ -452,11 +462,16 @@ export class GameRoom {
     const ballBody = new CANNON.Body({
       mass: BALL_MASS,
       shape: new CANNON.Sphere(BALL_RADIUS),
-      material: this.matBall,
+      material: this.matPiece,
       linearDamping: 0.4,
       angularDamping: 0.4
     });
     ballBody.position.set(0, BALL_RADIUS, 0);
+
+    // Collision filters - bola pode colidir com tudo
+    ballBody.collisionFilterGroup = 2;   // GROUP.BALL
+    ballBody.collisionFilterMask = 1 | 2 | 8 | 16;  // PLAYER | BALL | BALL_WALL | FAR_WALL
+
     this.gameState.physics.addBody(ballBody);
 
     this.gameState.ball = {
