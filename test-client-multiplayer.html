@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste de Multiplayer Cliente - Passos 19-23</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .status.ok { background: #d4edda; color: #155724; }
+        .status.warn { background: #fff3cd; color: #856404; }
+        .status.err { background: #f8d7da; color: #721c24; }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+        }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        #hud {
+            background: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Teste de Multiplayer Cliente - Passos 19-23</h1>
+
+    <div class="container">
+        <!-- Painel de Controle -->
+        <div class="panel">
+            <h2>Controles</h2>
+
+            <div>
+                <h3>Passo 19: Conectar</h3>
+                <input type="text" id="serverUrl" value="http://localhost:3000" placeholder="URL do servidor">
+                <button onclick="conectar()">Conectar</button>
+                <div id="statusConexao" class="status warn">❌ Desconectado</div>
+            </div>
+
+            <div>
+                <h3>Criar/Entrar em Sala</h3>
+                <button onclick="criarSala()">Criar Sala</button>
+                <button onclick="mostrarEntrarSala()">Entrar em Sala</button>
+                <div id="statusSala" class="status warn">❌ Sem sala</div>
+                <input type="text" id="roomCodeInput" placeholder="Código da sala" style="display:none;">
+            </div>
+
+            <div>
+                <h3>Teste Passo 22: Player Input</h3>
+                <button onclick="enviarInputTeste()">Enviar Input Teste</button>
+                <div id="statusInput" class="status warn">⏳ Aguardando</div>
+            </div>
+
+            <div>
+                <button onclick="desconectar()">Desconectar</button>
+            </div>
+        </div>
+
+        <!-- Painel de Status -->
+        <div class="panel">
+            <h2>Status</h2>
+
+            <h3>Passo 19: Conexão Socket.io</h3>
+            <div id="infoConexao">
+                <p>Socket ID: <code id="socketId">-</code></p>
+                <p>Estado: <code id="estadoConexao">desconectado</code></p>
+            </div>
+
+            <h3>Passo 20: State Update</h3>
+            <div id="infoState">
+                <p>Updates recebidos: <code id="updateCount">0</code></p>
+                <p>Último update: <code id="lastUpdate">-</code></p>
+                <p>Ball pos: <code id="ballPos">-</code></p>
+            </div>
+
+            <h3>Passo 23: HUD Data</h3>
+            <div id="hud">
+                <p>Placar: <code id="hudScores">-</code></p>
+                <p>Posse: <code id="hudPossession">-</code></p>
+                <p>Toques: <code id="hudTouches">-</code></p>
+                <p>Tempo: <code id="hudTime">-</code></p>
+                <p>Ping: <code id="hudPing">-</code>ms</p>
+                <p>Seu Time: <code id="hudTeam">-</code></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io CDN -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script type="module">
+        import { MultiplayerManager } from './js/multiplayer.js';
+
+        let multiplayer = null;
+        let updateCount = 0;
+
+        // ========== PASSO 19: Conectar ==========
+        window.conectar = function() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            multiplayer = new MultiplayerManager();
+
+            // Callbacks
+            multiplayer.onRoomReady = (data) => {
+                document.getElementById('statusSala').className = 'status ok';
+                document.getElementById('statusSala').textContent = `✅ Sala: ${data.roomCode} - Time: ${data.myTeam}`;
+                alert(`Sala pronta! Você é ${data.myTeam}`);
+            };
+
+            multiplayer.onStateUpdated = (state) => {
+                updateCount++;
+                document.getElementById('updateCount').textContent = updateCount;
+                document.getElementById('lastUpdate').textContent = new Date(state.timestamp).toLocaleTimeString();
+                document.getElementById('ballPos').textContent = `(${state.ball.pos.x.toFixed(1)}, ${state.ball.pos.y.toFixed(1)}, ${state.ball.pos.z.toFixed(1)})`;
+
+                // PASSO 23: Sincronizar HUD
+                const hud = multiplayer.getHUDData();
+                if (hud) {
+                    document.getElementById('hudScores').textContent = `${hud.scores.yellow} × ${hud.scores.blue}`;
+                    document.getElementById('hudPossession').textContent = hud.possession === 'yellow' ? '🟡 Amarelo' : '🔵 Azul';
+                    document.getElementById('hudTouches').textContent = `${hud.touches}/${hud.maxTouches}`;
+                    document.getElementById('hudTime').textContent = `${hud.half}T ${hud.timeLeft.toFixed(0)}s`;
+                    document.getElementById('hudPing').textContent = hud.ping.toFixed(0);
+                    document.getElementById('hudTeam').textContent = hud.myTeam ? hud.myTeam.toUpperCase() : '-';
+                }
+            };
+
+            multiplayer.onOpponentDisconnected = () => {
+                alert('Oponente desconectou!');
+            };
+
+            multiplayer.onError = (msg) => {
+                alert('Erro: ' + msg);
+            };
+
+            multiplayer.connect(serverUrl);
+
+            // Monitorar conexão
+            setTimeout(() => {
+                if (multiplayer.isConnected) {
+                    document.getElementById('statusConexao').className = 'status ok';
+                    document.getElementById('statusConexao').textContent = '✅ Conectado';
+                    document.getElementById('estadoConexao').textContent = 'conectado';
+                    document.getElementById('socketId').textContent = multiplayer.socket.id.substring(0, 16) + '...';
+                } else {
+                    document.getElementById('statusConexao').className = 'status err';
+                    document.getElementById('statusConexao').textContent = '❌ Falha na conexão';
+                }
+            }, 2000);
+        };
+
+        // Criar Sala
+        window.criarSala = function() {
+            if (!multiplayer) {
+                alert('Conecte primeiro');
+                return;
+            }
+            multiplayer.createRoom({
+                gameMode: 'button_football',
+                yellowTeam: 'flamengo',
+                blueTeam: 'palmeiras'
+            });
+        };
+
+        // Entrar em Sala
+        window.mostrarEntrarSala = function() {
+            const roomCode = prompt('Digite o código da sala:');
+            if (roomCode) {
+                multiplayer.joinRoom(roomCode);
+            }
+        };
+
+        // PASSO 22: Enviar Input
+        window.enviarInputTeste = function() {
+            if (!multiplayer?.isActive) {
+                alert('Sala não está pronta');
+                return;
+            }
+
+            // Simular drag: jogador 5 chuta na diagonal com força média
+            multiplayer.sendPlayerInput(
+                5,                           // playerIdx
+                Math.random() * 2 - 1,       // directionX (aleatório)
+                Math.random() * 2 - 1,       // directionZ (aleatório)
+                Math.random()                // intensity (aleatório 0-1)
+            );
+
+            document.getElementById('statusInput').className = 'status ok';
+            document.getElementById('statusInput').textContent = '✅ Input enviado!';
+
+            setTimeout(() => {
+                document.getElementById('statusInput').className = 'status warn';
+                document.getElementById('statusInput').textContent = '⏳ Aguardando';
+            }, 2000);
+        };
+
+        // Desconectar
+        window.desconectar = function() {
+            if (multiplayer) {
+                multiplayer.disconnect();
+                document.getElementById('statusConexao').className = 'status err';
+                document.getElementById('statusConexao').textContent = '❌ Desconectado';
+                document.getElementById('estadoConexao').textContent = 'desconectado';
+                multiplayer = null;
+                updateCount = 0;
+            }
+        };
+
+        console.log('✅ Teste de Multiplayer Cliente Pronto');
+        console.log('Passos 19-23 implementados:');
+        console.log('  ✓ Passo 19: connect()');
+        console.log('  ✓ Passo 20: state_update listener');
+        console.log('  ✓ Passo 21: Interpolação visual');
+        console.log('  ✓ Passo 22: sendPlayerInput()');
+        console.log('  ✓ Passo 23: getHUDData()');
+    </script>
+</body>
+</html>

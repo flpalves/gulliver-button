@@ -593,7 +593,9 @@ export class Game {
   }
 
   _updateHUD(customStatus) {
-    document.getElementById('poss-val').textContent = this.teamLabel[this.possession];
+    const possEl = document.getElementById('poss-val');
+    possEl.textContent = this.teamLabel[this.possession];
+    possEl.className = `hud-val poss-${this.possession}`;
     document.getElementById('touch-val').textContent = `${this.touches} / ${this.maxTouches}`;
     this._setStatus(customStatus || `Vez do ${this.teamLabel[this.possession]} — clique e arraste uma peça`);
     if (!this.locked && !this.paused && !this.matchEnded) {

@@ -15,6 +15,30 @@ body { background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', Arial, sa
 .tbadge { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); }
 #sy { color: #FFD700; } #sb { color: #87CEEB; }
 #timer-val { font-family: 'Courier New', monospace; font-size: 19px; color: #fff; }
+#poss-val {
+  font-size: 16px;
+  font-weight: bold;
+  padding: 8px 14px;
+  border-radius: 10px;
+  animation: pulsePossession 1.5s ease-in-out infinite;
+  min-width: 140px;
+  text-align: center;
+  transition: all .3s ease;
+}
+#poss-val.poss-yellow {
+  background: rgba(255,215,0,.15);
+  border: 2px solid #FFD700;
+  color: #FFD700;
+}
+#poss-val.poss-blue {
+  background: rgba(135,206,235,.15);
+  border: 2px solid #87CEEB;
+  color: #87CEEB;
+}
+@keyframes pulsePossession {
+  0%, 100% { box-shadow: 0 0 12px currentColor; transform: scale(1); }
+  50% { box-shadow: 0 0 20px currentColor; transform: scale(1.05); }
+}
 
 #toast-container {
   position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 20; pointer-events: none;

@@ -22,10 +22,14 @@ export class MultiplayerManager {
     this.previousState = null;
     this.interpolationAlpha = 0;
     this.lastStateTime = Date.now();
+    this.isMyTurn = false;
     this.onStateUpdated = null;
     this.onRoomReady = null;
     this.onOpponentDisconnected = null;
+    this.onConnected = null;
     this.onError = null;
+    this.pendingRoomConfig = null;
+    this.pendingRoomCodeToJoin = null;
     console.log('[Multiplayer] Manager inicializado');
   }
 
@@ -50,6 +54,22 @@ export class MultiplayerManager {
     this.socket.on('connect', () => {
       this.isConnected = true;
       console.log(`[Multiplayer] Conectado. ID: ${this.socket.id.substring(0, 8)}...`);
+      if (this.onConnected) {
+        console.log('[Multiplayer] Chamando onConnected callback...');
+        this.onConnected();
+      }
+      // Se há uma sala pendente para criar, criar agora
+      if (this.pendingRoomConfig) {
+        console.log('[Multiplayer] Criando sala pendente...');
+        this.socket.emit('create_room', { gameConfig: this.pendingRoomConfig });
+        this.pendingRoomConfig = null;
+      }
+      // Se há uma sala pendente para entrar, entrar agora
+      if (this.pendingRoomCodeToJoin) {
+        console.log('[Multiplayer] Entrando em sala pendente:', this.pendingRoomCodeToJoin);
+        this.socket.emit('join_room', this.pendingRoomCodeToJoin);
+        this.pendingRoomCodeToJoin = null;
+      }
     });
 
     this.socket.on('disconnect', () => {
@@ -70,8 +90,14 @@ export class MultiplayerManager {
       this.isActive = true;
       this.myTeam = data.myTeam || this.myTeam;
       this.roomCode = data.roomCode;
-      console.log(`[Multiplayer] Sala pronta! Time: ${this.myTeam}`);
-      if (this.onRoomReady) this.onRoomReady(data);
+      console.log(`[Multiplayer] Sala pronta! Time: ${this.myTeam}`, data);
+      console.log(`[Multiplayer] onRoomReady callback exists: ${!!this.onRoomReady}`);
+      if (this.onRoomReady) {
+        console.log('[Multiplayer] Chamando onRoomReady callback...');
+        this.onRoomReady(data);
+      } else {
+        console.error('[Multiplayer] ❌ onRoomReady callback NÃO foi definido!');
+      }
       this._dispatch('roomReady', data);
     });
 
@@ -81,6 +107,8 @@ export class MultiplayerManager {
       this.gameState = state;
       this.lastStateTime = Date.now();
       this.interpolationAlpha = 0;
+      // Atualizar se é minha vez
+      this.isMyTurn = state.possession === this.myTeam;
       if (this.onStateUpdated) this.onStateUpdated(state);
     });
 
@@ -116,6 +144,13 @@ export class MultiplayerManager {
       this._dispatch('bothPlayersReady', data);
     });
 
+    this.socket.on('shot_fired', (payload) => {
+      console.log('[Multiplayer] 📤 RECEIVED shot_fired:', payload);
+      if (this.onRemoteShotFired) {
+        this.onRemoteShotFired(payload);
+      }
+    });
+
     this.socket.on('error', (data) => {
       console.error('[Multiplayer] Erro:', data.message);
       if (this.onError) this.onError(data.message);
@@ -123,12 +158,24 @@ export class MultiplayerManager {
   }
 
   createRoom(gameConfig) {
-    if (!this.isConnected) return;
+    console.log('[Multiplayer] createRoom chamado, isConnected:', this.isConnected);
+    if (!this.isConnected) {
+      console.log('[Multiplayer] Aguardando conexão... Armazenando config para criar sala depois');
+      this.pendingRoomConfig = gameConfig;
+      return;
+    }
+    console.log('[Multiplayer] Emitindo create_room event...');
     this.socket.emit('create_room', { gameConfig });
   }
 
   joinRoom(roomCode) {
-    if (!this.isConnected) return;
+    console.log('[Multiplayer] joinRoom chamado, roomCode:', roomCode, 'isConnected:', this.isConnected);
+    if (!this.isConnected) {
+      console.log('[Multiplayer] Aguardando conexão para entrar na sala...');
+      this.pendingRoomCodeToJoin = roomCode;
+      return;
+    }
+    console.log('[Multiplayer] Emitindo join_room event...');
     this.socket.emit('join_room', roomCode);
   }
 
@@ -250,6 +297,17 @@ export class MultiplayerManager {
     if (!this.isConnected || !this.socket) return;
     this.socket.emit('player_ready', {});
     console.log('[Multiplayer] Emitted player_ready');
+  }
+
+  emitShotFired(playerIdx, impulse, bodyStates) {
+    if (!this.isActive || !this.socket) return;
+    this.socket.emit('shot_fired', {
+      playerIdx,
+      impulse,
+      bodyStates,
+      timestamp: Date.now()
+    });
+    console.log('[Multiplayer] Emitted shot_fired:', { playerIdx, impulse });
   }
 
   _dispatch(eventName, detail) {

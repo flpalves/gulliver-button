@@ -8,6 +8,7 @@ import { Game, RULE_MODES } from './game.js';
 import { setGameMode, setTeamColors, resetTeamColors, GAME_MODES } from './constants.js';
 import { clearTextureCache } from './textures.js';
 import { hexToNumber } from './teams.js';
+import { MultiplayerUI } from './multiplayer-ui.js';
 
 // ─────────────────────────────────────────────
 // INIT & LOOP
@@ -15,6 +16,8 @@ import { hexToNumber } from './teams.js';
 let field, players, ball, input, physics, game;
 let lastFrameTime = 0;
 let accumulator = 0;
+let multiplayerUI = null;
+let gameMode = 'local';
 
 const _stadiumAudio = new Audio('assets/stadium.mp3');
 _stadiumAudio.loop = true;
@@ -130,6 +133,9 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   game = new Game({ players, ball, physics, field, ruleMode, gameMode, halfSeconds, multiplayer });
   input = new InputHandler(players, game, multiplayer);
 
+  // Configure multiplayer callbacks for game sync
+  multiplayer.onRemoteShotFired = (payload) => game._onRemoteShotFired(payload);
+
   // Turn state is now controlled by the server via game_state events
 
   lastFrameTime = performance.now();
@@ -137,6 +143,58 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   _stadiumAudio.play().catch(() => {});
 }
 
+// ─────────────────────────────────────────────
+// MULTIPLAYER UI INTEGRATION
+// ─────────────────────────────────────────────
+function initMultiplayerUI() {
+  multiplayerUI = new MultiplayerUI();
+
+  multiplayerUI.onGameStart = (mode, multiplayer) => {
+    gameMode = mode;
+
+    if (mode === 'local') {
+      // Modo local: inicia jogo normalmente
+      init();
+    } else if (mode === 'multiplayer' && multiplayer) {
+      // Modo multiplayer: inicia jogo com multiplayer
+      initMultiplayer(RULE_MODES.FOUR_TOUCHES, 'sphere', GAME_MODES.STANDARD, 5 * 60, multiplayer);
+
+      // Sincronizar posições com servidor a cada frame
+      if (multiplayer.onStateUpdated) {
+        multiplayerUI.syncPositionsWithServer((state, mp) => {
+          // Atualizar posições dos jogadores
+          if (players && state.players) {
+            for (const team of ['yellow', 'blue']) {
+              for (let i = 0; i < Math.min(players.length / 2, state.players[team].length); i++) {
+                const pos = mp.getPlayerPosition(team, i);
+                const playerTeam = players.filter(p => p.team === team);
+                if (playerTeam[i] && pos) {
+                  playerTeam[i].group.position.copy(pos);
+                }
+              }
+            }
+
+            // Atualizar bola
+            const ballPos = mp.getBallPosition();
+            if (ball && ballPos) {
+              ball.group.position.copy(ballPos);
+            }
+          }
+        });
+      }
+    }
+  };
+
+  // Menu começa visível, aguardando escolha do jogador
+  console.log('[Main] Multiplayer UI iniciado, aguardando escolha do modo');
+}
+
 // Export for use in HTML
-export { init as initGame, initMultiplayer as initGameMultiplayer, RULE_MODES, GAME_MODES };
+export {
+  init as initGame,
+  initMultiplayer as initGameMultiplayer,
+  initMultiplayerUI,
+  RULE_MODES,
+  GAME_MODES
+};
 
