@@ -18,7 +18,7 @@ const RESTART_DELAY_MS = 1000;   // ball keeps flying free for 1s after leaving 
 const FLASH_MS = 600;
 
 export class Game {
-  constructor({ players, ball, physics, field = null, ruleMode = RULE_MODES.FOUR_TOUCHES, gameMode = GAME_MODES.STANDARD, halfSeconds = HALF_SECONDS, teamNames = DEFAULT_TEAM_LABEL }) {
+  constructor({ players, ball, physics, field = null, ruleMode = RULE_MODES.FOUR_TOUCHES, gameMode = GAME_MODES.STANDARD, halfSeconds = HALF_SECONDS, teamNames = DEFAULT_TEAM_LABEL, multiplayer = null }) {
     this.players = players;
     this.ball = ball;
     this.physics = physics;
@@ -27,6 +27,7 @@ export class Game {
     this.gameMode = gameMode;
     this.halfSeconds = halfSeconds;
     this.teamLabel = teamNames;
+    this.multiplayer = multiplayer;
 
     // Rule configuration
     this.maxTouches = ruleMode === RULE_MODES.TWELVE_TOUCHES ? 12 : 4;
@@ -105,6 +106,14 @@ export class Game {
 
     document.getElementById('obtn').addEventListener('click', () => this.handleOverlayBtn());
 
+    // Multiplayer callbacks
+    if (this.multiplayer) {
+      this.multiplayer.onRemoteShotFired = (payload) => this._onRemoteShotFired(payload);
+      this.multiplayer.onOpponentDisconnected = (data) => this._onOpponentDisconnected(data);
+      this.multiplayer.onOpponentReconnected = () => this._onOpponentReconnected();
+      this.multiplayer.onRemoteKeeperReposition = (payload) => this._onRemoteKeeperReposition(payload);
+    }
+
     this._updateHUD();
     this._updateTimerHUD();
     this._updateScoreHUD();
@@ -112,6 +121,11 @@ export class Game {
 
   // ── Rules interface consumed by InputHandler ──
   canDrag(piece) {
+    // In multiplayer, only allow dragging your own team's pieces
+    if (this.multiplayer && this.multiplayer.isActive) {
+      if (piece.team !== this.multiplayer.myTeam) return false;
+    }
+
     // A piece that wandered off the field (no perimeter walls anymore) can
     // always be dragged back in by its own team, regardless of whose turn
     // it is or whether a shot is resolving.
@@ -151,7 +165,15 @@ export class Game {
     return Math.abs(x) > C.HW || Math.abs(z) > C.HH;
   }
 
-  onShotFired(piece) {
+  onShotFired(piece, impulse = null) {
+    console.log('[Game] onShotFired called:', {
+      hasPiece: !!piece,
+      hasImpulse: !!impulse,
+      isMultiplayer: !!this.multiplayer,
+      isActive: this.multiplayer?.isActive,
+      impulseValue: impulse
+    });
+
     this._stopTurnTimer();
     this.locked = true;
     this.shooter = piece;
@@ -159,6 +181,14 @@ export class Game {
     this.keeperTouchedBall = false;
     this.isDirectFromThrowIn = this.throwInKickPending;
     this.throwInKickPending = false;
+
+    // Multiplayer: avisa o oponente que um chute aconteceu (cue de som/UI).
+    // A física do chute roda localmente (somos a autoridade) e viaja via snapshots.
+    if (this.multiplayer && this.multiplayer.isActive && impulse) {
+      const playerIdx = this.players.indexOf(piece);
+      this.multiplayer.emitShotFired(playerIdx, impulse);
+    }
+
     this._setStatus('Resolvendo jogada...');
   }
 
@@ -180,6 +210,10 @@ export class Game {
 
   // ── Called once per frame from main.js, with the real elapsed seconds ──
   update(dt) {
+    // Espectador multiplayer: as regras (relógio, resolução de jogada, bola
+    // fora) rodam apenas no cliente dono da vez; aqui tudo chega via snapshot.
+    if (!this.isPhysicsAuthority()) return;
+
     if (!this.paused && !this.matchEnded) {
       this.timeLeft -= dt;
       if (this.timeLeft <= 0) {
@@ -515,6 +549,9 @@ export class Game {
 
   handleOverlayBtn() {
     document.getElementById('overlay').classList.remove('on');
+    // Espectador multiplayer: o reinício do tempo/jogo é decidido pelo dono
+    // da vez e chega via snapshot — aqui o botão só fecha o overlay.
+    if (this.multiplayer && this.multiplayer.isActive && !this.isPhysicsAuthority()) return;
     if (this.matchEnded) {
       this._fullReset();
     } else {
@@ -568,7 +605,9 @@ export class Game {
   }
 
   _updateHUD(customStatus) {
-    document.getElementById('poss-val').textContent = this.teamLabel[this.possession];
+    const possEl = document.getElementById('poss-val');
+    possEl.textContent = this.teamLabel[this.possession];
+    possEl.className = `hud-val poss-${this.possession}`;
     document.getElementById('touch-val').textContent = `${this.touches} / ${this.maxTouches}`;
     this._setStatus(customStatus || `Vez do ${this.teamLabel[this.possession]} — clique e arraste uma peça`);
     if (!this.locked && !this.paused && !this.matchEnded) {
@@ -591,6 +630,7 @@ export class Game {
   }
 
   _startTurnTimer() {
+    if (!this.isPhysicsAuthority()) return;   // timers de turno só no dono da vez
     this._stopTurnTimer();
     this._turnTimeLeft = 10;
     this._updateTurnTimerDisplay();
@@ -626,6 +666,7 @@ export class Game {
   }
 
   _startRepositionTimer() {
+    if (!this.isPhysicsAuthority()) return;   // timers de turno só no dono da vez
     this._stopTurnTimer();
     this._turnTimeLeft = 5;
     this._updateTurnTimerDisplay();
@@ -669,6 +710,198 @@ export class Game {
     const half = this.half === 1 ? '1T' : '2T';
     document.getElementById('timer-val').textContent =
       `${half} ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  _captureBodyStates() {
+    const states = [];
+
+    // Ball
+    states.push({
+      id: 'ball',
+      pos: { x: this.ball.physBody.position.x, y: this.ball.physBody.position.y, z: this.ball.physBody.position.z },
+      vel: { x: this.ball.physBody.velocity.x, y: this.ball.physBody.velocity.y, z: this.ball.physBody.velocity.z },
+      quat: { x: this.ball.physBody.quaternion.x, y: this.ball.physBody.quaternion.y, z: this.ball.physBody.quaternion.z, w: this.ball.physBody.quaternion.w }
+    });
+
+    // Players
+    this.players.forEach((p, idx) => {
+      states.push({
+        id: `player_${idx}`,
+        pos: { x: p.physBody.position.x, y: p.physBody.position.y, z: p.physBody.position.z },
+        vel: { x: p.physBody.velocity.x, y: p.physBody.velocity.y, z: p.physBody.velocity.z },
+        quat: { x: p.physBody.quaternion.x, y: p.physBody.quaternion.y, z: p.physBody.quaternion.z, w: p.physBody.quaternion.w }
+      });
+    });
+
+    return states;
+  }
+
+  applyBodyStates(states, syncVelocity = true) {
+    if (!states || !Array.isArray(states)) {
+      console.warn('[Game] applyBodyStates: invalid states', states);
+      return;
+    }
+
+    console.log(`[Game] applyBodyStates: ${states.length} bodies`);
+
+    states.forEach(state => {
+      if (state.id === 'ball' && this.ball) {
+        console.log(`[Game] Ball pos: (${state.pos.x.toFixed(2)}, ${state.pos.y.toFixed(2)}, ${state.pos.z.toFixed(2)})`);
+        this.ball.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
+        if (syncVelocity) {
+          this.ball.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+        }
+        this.ball.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
+        this.ball.physBody.wakeUp();  // Force collision recalculation
+      } else if (state.id.startsWith('player_')) {
+        const idx = parseInt(state.id.split('_')[1]);
+        const player = this.players[idx];
+        if (player) {
+          player.physBody.position.set(state.pos.x, state.pos.y, state.pos.z);
+          if (syncVelocity) {
+            player.physBody.velocity.set(state.vel.x, state.vel.y, state.vel.z);
+          }
+          player.physBody.quaternion.set(state.quat.x, state.quat.y, state.quat.z, state.quat.w);
+          player.physBody.wakeUp();  // Force collision recalculation
+        }
+      }
+    });
+  }
+
+  // True quando este cliente é o dono da vez (simula a física localmente).
+  // Em modo local (sem multiplayer) somos sempre a autoridade.
+  isPhysicsAuthority() {
+    if (!this.multiplayer || !this.multiplayer.isActive) return true;
+    return this.multiplayer.isAuthority;
+  }
+
+  // ── Snapshot: dono da vez → servidor → espectador ──
+  buildSnapshot(extra = {}) {
+    return {
+      timestamp: Date.now(),
+      bodyStates: this._captureBodyStates(),
+      game: {
+        possession: this.possession,
+        touches: this.touches,
+        scores: { yellow: this.scores.yellow, blue: this.scores.blue },
+        locked: this.locked,
+        ballDead: this.ballDead,
+        half: this.half,
+        timeLeft: this.timeLeft,
+        paused: this.paused,
+        matchEnded: this.matchEnded,
+        // O novo dono precisa destes para continuar as regras corretamente
+        lastTouchTeam: this.lastTouchTeam,
+        restartPending: this.restartPending,
+        throwInKickPending: this.throwInKickPending
+      },
+      ...extra   // ex.: { handoff: true } no último snapshot antes da troca de posse
+    };
+  }
+
+  // Espectador: aplica o estado de jogo vindo do snapshot do dono da vez
+  applySnapshotGame(g) {
+    if (!g) return;
+
+    const prevHalf = this.half;
+    const prevEnded = this.matchEnded;
+    const prevPaused = this.paused;
+    const scoreChanged = g.scores &&
+      (g.scores.yellow !== this.scores.yellow || g.scores.blue !== this.scores.blue);
+
+    this.possession = g.possession;
+    this.touches = g.touches;
+    this.locked = g.locked;
+    this.ballDead = g.ballDead;
+    this.half = g.half;
+    this.timeLeft = g.timeLeft;
+    this.paused = g.paused;
+    this.matchEnded = g.matchEnded;
+    this.lastTouchTeam = g.lastTouchTeam ?? this.lastTouchTeam;
+    this.restartPending = g.restartPending ?? null;
+    this.throwInKickPending = !!g.throwInKickPending;
+
+    if (scoreChanged) {
+      this.scores = { yellow: g.scores.yellow, blue: g.scores.blue };
+      this._updateScoreHUD();
+      this._flashGoal();
+      this._goalSound.currentTime = 0;
+      this._goalSound.play().catch(() => {});
+    }
+
+    // Transições de tempo/fim de jogo vistas pelo espectador
+    if (g.matchEnded && !prevEnded) {
+      this._showOverlay('FIM DE JOGO', 'Placar final');
+    } else if (g.half === 2 && prevHalf === 1 && g.paused) {
+      this._showOverlay('INTERVALO', 'Placar parcial');
+    } else if (!g.paused && prevPaused) {
+      document.getElementById('overlay').classList.remove('on');
+    }
+
+    this._updateTimerHUD();
+    this._updateHUD();
+  }
+
+  _onRemoteShotFired(payload) {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    // A física do chute chega via snapshots — aqui só o cue de som
+    const now = performance.now();
+    if (now - this._lastKickTime > 120) {
+      this._lastKickTime = now;
+      this._kickSound.currentTime = 0;
+      this._kickSound.play().catch(() => {});
+    }
+  }
+
+  // Espectador reposicionou o próprio goleiro em tempo real (ver
+  // InputHandler._sendKeeperPosition) — só aplicamos se formos nós quem
+  // simula a física agora; caso contrário o dono da vez ainda não somos nós
+  // e a posição seria descartada no próximo passo de física de qualquer forma.
+  _onRemoteKeeperReposition({ playerIdx, x, z } = {}) {
+    if (!this.isPhysicsAuthority()) return;
+    const piece = this.players[playerIdx];
+    if (!piece || !piece.isKeeper) return;
+
+    const body = piece.physBody;
+    body.position.x = x;
+    body.position.z = z;
+    body.velocity.set(0, 0, 0);
+    piece.group.position.x = x;
+    piece.group.position.z = z;
+  }
+
+  _onOpponentDisconnected(data) {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    console.log('[Game] Opponent disconnected:', data);
+    this.paused = true;
+    const waitSeconds = Math.ceil(data.waitSeconds || 30);
+    this._setStatus(`⚠️ ${data.team === 'yellow' ? '🟡 Amarelo' : '🔵 Azul'} desconectou. Aguardando reconexão... (${waitSeconds}s)`);
+
+    // Dispatch event for UI to show disconnection overlay
+    window.dispatchEvent(new CustomEvent('multiplayer:opponentDisconnected', {
+      detail: data
+    }));
+  }
+
+  _onOpponentReconnected() {
+    if (!this.multiplayer || !this.multiplayer.isActive) return;
+
+    console.log('[Game] Opponent reconnected');
+    this.paused = false;
+
+    // Quem reconecta sempre volta como espectador (perdeu o estado local).
+    // Se ninguém estiver simulando a física agora, assumimos a autoridade e
+    // reenviamos o estado completo para resincronizar o outro lado.
+    if (!this.multiplayer.isAuthority) {
+      this.multiplayer.isAuthority = true;
+      this.multiplayer.isMyTurn = true;
+    }
+    this.multiplayer.sendPhysicsState(this.buildSnapshot());
+
+    this._updateHUD();
+    window.dispatchEvent(new CustomEvent('multiplayer:opponentReconnectedUI', {}));
   }
 }
 

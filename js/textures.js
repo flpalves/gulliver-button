@@ -82,20 +82,27 @@ export function makePlayerTexture(playerIndex, teamColorHex, teamId) {
     },
     undefined,
     playerIndex >= 2 ? () => {
-      _loader.load(`assets/players/${teamId}/players.png`, (loaded) => {
-        const S = 256, cx = S / 2;
-        const cv = document.createElement('canvas');
-        cv.width = cv.height = S;
-        const ctx = cv.getContext('2d');
-        ctx.drawImage(loaded.image, 0, 0, S, S);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.round(S * 0.30)}px Arial, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(playerIndex), cx, S * 0.725);
-        tex.image = cv;
-        tex.needsUpdate = true;
-      });
+      _loader.load(
+        `assets/players/${teamId}/players.png`,
+        (loaded) => {
+          const S = 256, cx = S / 2;
+          const cv = document.createElement('canvas');
+          cv.width = cv.height = S;
+          const ctx = cv.getContext('2d');
+          ctx.drawImage(loaded.image, 0, 0, S, S);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `bold ${Math.round(S * 0.30)}px Arial, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(playerIndex), cx, S * 0.725);
+          tex.image = cv;
+          tex.needsUpdate = true;
+        },
+        undefined,
+        () => {
+          // If both individual and players.png fail, use procedural (already set as placeholder)
+        }
+      );
     } : undefined
   );
 

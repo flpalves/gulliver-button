@@ -1,0 +1,33 @@
+{
+  "name": "gulliver-button",
+  "version": "1.0.0",
+  "description": "3D button soccer simulator with online multiplayer",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "server": "node server.js"
+  },
+  "keywords": [
+    "futebol",
+    "botão",
+    "3d",
+    "multiplayer"
+  ],
+  "author": "Felipe Alves",
+  "license": "MIT",
+  "dependencies": {
+    "cannon-es": "^0.20.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

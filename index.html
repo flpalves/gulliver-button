@@ -43,8 +43,96 @@
   <button id="reset-view-btn" title="Resetar câmera">⌂</button>
 </div>
 
+<!-- ── Mode selection screen ── -->
+<div id="mode-select-overlay" class="menu-overlay-active">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title">FUTEBOL DE <span class="menu-title-gold">BOTÃO 3D</span></div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="margin-bottom: 20px; color: #fff; font-size: 14px;">Escolha o modo de jogo:</div>
+      <button class="menu-start-btn" id="local-mode-btn" style="margin-bottom: 15px;">🎮 Jogar Local</button>
+      <button class="menu-start-btn" id="online-mode-btn">🌐 Jogar Online</button>
+    </div>
+  </div>
+</div>
+
+<div id="lobby-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 450px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 20px;">MULTIPLAYER ONLINE</div>
+    </div>
+    <div style="padding: 20px;">
+      <div style="margin-bottom: 20px; text-align: center;">
+        <button class="menu-start-btn" id="create-room-btn" style="margin-bottom: 10px;">➕ Criar Sala</button>
+        <button class="menu-start-btn" id="join-room-btn">🔗 Entrar em Sala</button>
+      </div>
+      <button id="back-to-mode-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">← Voltar</button>
+    </div>
+  </div>
+</div>
+
+<div id="create-room-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Criando Sala...</div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="color: #fff; margin-bottom: 15px;">Aguarde a conexão com o servidor...</div>
+      <div id="connecting-spinner" style="font-size: 40px; animation: spin 1s linear infinite;">⚙️</div>
+    </div>
+    <style>
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </div>
+</div>
+
+<div id="reconnecting-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Reconectando...</div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="color: #fff; margin-bottom: 15px;">Retomando sua partida online...</div>
+      <div style="font-size: 40px; animation: spin 1s linear infinite;">⚙️</div>
+    </div>
+  </div>
+</div>
+
+<div id="waiting-room-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 450px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Sala de Espera</div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="color: #FFD700; font-size: 24px; font-weight: bold; margin-bottom: 15px;" id="room-code-display">AAAA</div>
+      <div style="color: #fff; margin-bottom: 20px; font-size: 14px;">Compartilhe este código com seu oponente</div>
+      <button id="copy-code-btn" style="width: 100%; padding: 12px; background: #FFD700; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-bottom: 15px;">📋 Copiar Código</button>
+      <div style="color: #aaa; font-size: 12px; margin-bottom: 15px;">Aguardando oponente...</div>
+      <button id="cancel-room-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">❌ Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="join-room-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Entrar em Sala</div>
+    </div>
+    <div style="padding: 20px;">
+      <div style="color: #fff; margin-bottom: 10px; font-size: 14px;">Digite o código da sala:</div>
+      <input type="text" id="room-code-input" placeholder="Ex: ABCD" maxlength="4" style="width: 100%; padding: 12px; background: #333; color: #fff; border: 2px solid #FFD700; border-radius: 4px; font-size: 18px; text-transform: uppercase; margin-bottom: 20px; box-sizing: border-box; text-align: center;">
+      <button class="menu-start-btn" id="join-confirm-btn" style="margin-bottom: 10px;">🔗 Entrar</button>
+      <button id="back-to-lobby-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer;">← Voltar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Pre-game menu ── -->
-<div id="menu-overlay">
+<div id="menu-overlay" class="hidden">
   <div class="menu-box">
 
     <!-- Header -->
@@ -118,6 +206,7 @@
     </div>
 
     <button class="menu-start-btn" onclick="window.startGame()">⚽ JOGAR</button>
+    <button id="back-to-mode-select-btn" style="width: 100%; padding: 10px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">← Voltar</button>
   </div>
 </div>
 
@@ -136,6 +225,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
   window.selectedMode  = 'standard';
   window.selectedBall  = 'sphere';
@@ -180,7 +270,21 @@
   };
 
   window.cycleTeam = function(slot, dir) {
+    console.log(`[UI] cycleTeam called: slot=${slot}, dir=${dir}`);
     if (!window.TEAMS) return;
+
+    // In multiplayer: Yellow can only change team1, Blue can only change team2
+    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive) {
+      const isBluePlayer = multiplayer.myTeam === 'blue';
+      const canChangeTeam1 = !isBluePlayer;
+      const canChangeTeam2 = isBluePlayer;
+
+      if ((slot === 1 && !canChangeTeam1) || (slot === 2 && !canChangeTeam2)) {
+        console.log(`[UI] ❌ You cannot change team ${slot}`);
+        return;
+      }
+    }
+
     var n     = window.TEAMS.length;
     var other = slot === 1 ? window.team2Index : window.team1Index;
     var idx   = slot === 1 ? window.team1Index : window.team2Index;
@@ -192,10 +296,29 @@
     if (slot === 1) window.team1Index = idx;
     else            window.team2Index = idx;
     window.updateTeamDisplay(slot);
+
+    // Emit team change to other player
+    console.log(`[UI] Checking conditions to emit team_changed:`, {
+      isOnline: window.currentGameMode === 'online',
+      multiplayerExists: !!multiplayer,
+      isActive: multiplayer?.isActive,
+      myTeam: multiplayer?.myTeam,
+      roomCode: multiplayer?.roomCode
+    });
+
+    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive) {
+      console.log(`[UI] ✅ EMITTING team change: team1=${window.selectedTeam1}, team2=${window.selectedTeam2}`);
+      multiplayer.emitTeamChanged(window.selectedTeam1, window.selectedTeam2);
+    } else {
+      console.log(`[UI] ❌ NOT emitting - conditions not met`);
+    }
   };
 
   window.stabSelect = function(btn) {
     var group = btn.dataset.group;
+    var value = btn.dataset.value;
+    console.log(`[UI] stabSelect called: group=${group}, value=${value}`);
+
     document.querySelectorAll('.stab[data-group="' + group + '"]').forEach(function(b) {
       b.classList.remove('selected');
     });
@@ -204,9 +327,54 @@
     if (group === 'ball') window.selectedBall = btn.dataset.value;
     if (group === 'rule') window.selectedRule = btn.dataset.value;
     if (group === 'time') window.selectedTime = parseInt(btn.dataset.value);
+
+    // Emit settings change if in multiplayer and is room creator
+    console.log(`[UI] Checking conditions to emit settings:`, {
+      isOnline: window.currentGameMode === 'online',
+      multiplayerExists: !!multiplayer,
+      isActive: multiplayer?.isActive,
+      isCreator: multiplayer?.isRoomCreator,
+      myTeam: multiplayer?.myTeam,
+      roomCode: multiplayer?.roomCode
+    });
+
+    if (window.currentGameMode === 'online' && multiplayer && multiplayer.isActive && multiplayer.isRoomCreator) {
+      var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+      console.log(`[UI] ✅ EMITTING settings change:`, { mode: window.selectedMode, ball: window.selectedBall, rule: window.selectedRule, time: window.selectedTime });
+      multiplayer.emitSettingsChanged({
+        mode: window.selectedMode,
+        ball: window.selectedBall,
+        rule: window.selectedRule,
+        time: window.selectedTime,
+        team1: t1,
+        team2: t2
+      });
+    } else {
+      console.log(`[UI] ❌ NOT emitting settings - conditions not met`);
+    }
   };
 
   window.startGame = function() {
+    // Store game mode for later use
+    window.currentGameMode = window.currentGameMode || 'local';
+
+    if (window.currentGameMode === 'online') {
+      // For multiplayer: emit player_ready and wait for both players
+      console.log('[UI] Multiplayer: Emitting player_ready');
+      multiplayer.emitPlayerReady();
+
+      // Show waiting overlay
+      var waitingOverlay = document.createElement('div');
+      waitingOverlay.id = 'waiting-both-players-overlay';
+      waitingOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+      waitingOverlay.innerHTML = '<div style="text-align: center;"><div style="font-size: 24px; color: #fff; margin-bottom: 20px;">⏳ Aguardando outro jogador...</div><div style="font-size: 14px; color: #aaa;">Você já é está pronto!</div></div>';
+      document.body.appendChild(waitingOverlay);
+
+      return;
+    }
+
+    // Local mode: start game directly
     document.getElementById('menu-overlay').classList.add('hidden');
     if (window.gameModule && window.gameModule.initGame) {
       var ruleMode = window.selectedRule === '12-toques'
@@ -235,13 +403,61 @@
       }
     }
   };
+
+  // Start the actual game when both players are ready
+  window.startGameNow = function() {
+    console.log('[UI] Starting game now!');
+    var waitingOverlay = document.getElementById('waiting-both-players-overlay');
+    if (waitingOverlay) waitingOverlay.remove();
+
+    document.getElementById('menu-overlay').classList.add('hidden');
+
+    if (window.gameModule && window.gameModule.initGameMultiplayer && typeof multiplayer !== 'undefined') {
+      var ruleMode = window.selectedRule === '12-toques'
+        ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+        : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+      var m = window.selectedMode;
+      var gm = m === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+                 : m === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+                 : window.gameModule.GAME_MODES.STANDARD;
+
+      var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+      var teamConfig = (t1 && t2) ? { left: t1, right: t2 } : null;
+
+      window.gameModule.initGameMultiplayer(ruleMode, window.selectedBall, gm, window.selectedTime * 60, multiplayer, teamConfig);
+      window.gameInitialized = true;
+
+      // Guarda a sessão para permitir retomar a partida em caso de F5 acidental
+      multiplayer.saveSession({
+        mode: window.selectedMode,
+        ball: window.selectedBall,
+        rule: window.selectedRule,
+        time: window.selectedTime,
+        team1: window.selectedTeam1,
+        team2: window.selectedTeam2
+      });
+
+      if (t1 && t2) {
+        var badges = document.querySelectorAll('.tbadge');
+        badges[0].style.background = t1.css;
+        badges[1].style.background = t2.css;
+        document.getElementById('sy').style.color = t1.css;
+        document.getElementById('sb').style.color = t2.css;
+        document.getElementById('cam-goal-left-btn').textContent  = '🥅 ' + t1.name;
+        document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
+      }
+    }
+  };
 </script>
 <script type="module">
-  import { initGame, RULE_MODES, GAME_MODES } from '/js/main.js';
+  import { initGame, initGameMultiplayer, RULE_MODES, GAME_MODES } from '/js/main.js';
   import { TEAMS } from '/js/teams.js';
+  import { multiplayer } from '/js/multiplayer.js';
 
-  window.gameModule = { initGame, RULE_MODES, GAME_MODES };
+  window.gameModule = { initGame, initGameMultiplayer, RULE_MODES, GAME_MODES };
   window.TEAMS = TEAMS;
+  window.multiplayer = multiplayer;
 
   window.team1Index = TEAMS.findIndex(function(t) { return t.id === window.selectedTeam1; });
   window.team2Index = TEAMS.findIndex(function(t) { return t.id === window.selectedTeam2; });
@@ -250,6 +466,397 @@
 
   window.updateTeamDisplay(1);
   window.updateTeamDisplay(2);
+</script>
+
+<!-- Lobby UI Management -->
+<script type="module">
+  // multiplayer is already imported and exposed to window in the previous script tag
+
+  const MODE_SELECT = document.getElementById('mode-select-overlay');
+  const LOBBY = document.getElementById('lobby-overlay');
+  const CREATE_ROOM = document.getElementById('create-room-overlay');
+  const WAITING_ROOM = document.getElementById('waiting-room-overlay');
+  const JOIN_ROOM = document.getElementById('join-room-overlay');
+  const MENU = document.getElementById('menu-overlay');
+  const RECONNECTING = document.getElementById('reconnecting-overlay');
+
+  function hideAll() {
+    MODE_SELECT.classList.add('hidden');
+    LOBBY.classList.add('hidden');
+    CREATE_ROOM.classList.add('hidden');
+    WAITING_ROOM.classList.add('hidden');
+    JOIN_ROOM.classList.add('hidden');
+    MENU.classList.add('hidden');
+    RECONNECTING.classList.add('hidden');
+  }
+
+  function show(overlay) {
+    hideAll();
+    overlay.classList.remove('hidden');
+  }
+
+  // Mode selection
+  document.getElementById('local-mode-btn').addEventListener('click', () => {
+    window.currentGameMode = 'local';
+    show(MENU);
+  });
+
+  document.getElementById('online-mode-btn').addEventListener('click', () => {
+    window.currentGameMode = 'online';
+    show(LOBBY);
+  });
+
+  // Back to mode select
+  document.getElementById('back-to-mode-select-btn').addEventListener('click', () => {
+    window.currentGameMode = null;
+    show(MODE_SELECT);
+  });
+
+  // Create room
+  document.getElementById('create-room-btn').addEventListener('click', async () => {
+    show(CREATE_ROOM);
+
+    try {
+      await multiplayer.connect();
+
+      const t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
+      const t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+
+      const gameConfig = {
+        mode: window.selectedMode,
+        ball: window.selectedBall,
+        rule: window.selectedRule,
+        time: window.selectedTime,
+        team1: t1,
+        team2: t2
+      };
+
+      multiplayer.createRoom(gameConfig);
+    } catch (error) {
+      console.error('Failed to connect:', error);
+      alert('Falha ao conectar ao servidor: ' + error.message);
+      show(LOBBY);
+    }
+  });
+
+  // Room created - show waiting room
+  window.addEventListener('multiplayer:roomCreated', (e) => {
+    const { roomCode } = e.detail;
+    document.getElementById('room-code-display').textContent = roomCode;
+    show(WAITING_ROOM);
+  });
+
+  // Room ready - show menu for team/settings selection
+  window.addEventListener('multiplayer:roomReady', (e) => {
+    const { yellowSocketId, blueSocketId, gameConfig } = e.detail;
+    console.log(`[UI] 🎮 Room Ready Event received:`, {
+      yellowSocketId,
+      blueSocketId,
+      myTeam: multiplayer.myTeam,
+      isRoomCreator: multiplayer.isRoomCreator,
+      isActive: multiplayer.isActive,
+      currentGameMode: window.currentGameMode
+    });
+    show(MENU);
+
+    // Disable settings for blue player
+    const isBluePlayer = multiplayer.myTeam === 'blue';
+    console.log(`[UI] Room Ready: isBluePlayer=${isBluePlayer}, isRoomCreator=${multiplayer.isRoomCreator}`);
+    const settingsTabs = document.querySelectorAll('.setting-group');
+    settingsTabs.forEach(group => {
+      const buttons = group.querySelectorAll('.stab');
+      buttons.forEach(btn => {
+        btn.disabled = isBluePlayer;
+        btn.style.opacity = isBluePlayer ? '0.5' : '1';
+        btn.style.cursor = isBluePlayer ? 'not-allowed' : 'pointer';
+      });
+    });
+
+    // Add label showing who is room creator
+    if (!document.getElementById('room-creator-info')) {
+      const label = document.createElement('div');
+      label.id = 'room-creator-info';
+      label.style.cssText = 'text-align: center; color: #aaa; font-size: 12px; margin-top: 10px;';
+      label.textContent = isBluePlayer ? '🔒 Somente o criador da sala pode alterar as configurações' : '⚙️ Você é o criador da sala';
+      document.querySelector('.menu-settings-bar').appendChild(label);
+    }
+
+    // Mostra o código da sala para o criador poder compartilhar com o oponente
+    if (!isBluePlayer && multiplayer.roomCode && !document.getElementById('menu-room-code-info')) {
+      const codeBox = document.createElement('div');
+      codeBox.id = 'menu-room-code-info';
+      codeBox.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px; text-align: center; margin-top: 10px;';
+      codeBox.innerHTML =
+        '<span style="color: #aaa; font-size: 12px;">Código da sala:</span>' +
+        '<span style="color: #FFD700; font-weight: bold; font-size: 16px; letter-spacing: 2px;">' + multiplayer.roomCode + '</span>' +
+        '<button id="menu-copy-code-btn" style="padding: 4px 10px; background: #FFD700; color: #000; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">📋 Copiar</button>';
+      document.querySelector('.menu-settings-bar').appendChild(codeBox);
+
+      document.getElementById('menu-copy-code-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(multiplayer.roomCode).then(() => {
+          alert('Código copiado!');
+        }).catch(() => {
+          alert('Erro ao copiar código');
+        });
+      });
+    }
+
+    // Disable team selection for opponent's team
+    const team1Side = document.getElementById('team1-side');
+    const team2Side = document.getElementById('team2-side');
+
+    // Yellow controls team1, Blue controls team2
+    const canAlterTeam1 = !isBluePlayer;
+    const canAlterTeam2 = isBluePlayer;
+
+    // Disable buttons for opponent's team
+    team1Side?.querySelectorAll('.team-nav-btn').forEach(btn => {
+      btn.disabled = !canAlterTeam1;
+      btn.style.opacity = !canAlterTeam1 ? '0.3' : '1';
+      btn.style.cursor = !canAlterTeam1 ? 'not-allowed' : 'pointer';
+    });
+
+    team2Side?.querySelectorAll('.team-nav-btn').forEach(btn => {
+      btn.disabled = !canAlterTeam2;
+      btn.style.opacity = !canAlterTeam2 ? '0.3' : '1';
+      btn.style.cursor = !canAlterTeam2 ? 'not-allowed' : 'pointer';
+    });
+
+    // Add team ownership labels
+    if (!document.getElementById('team-ownership-label-1')) {
+      const team1Label = document.createElement('div');
+      team1Label.id = 'team-ownership-label-1';
+      team1Label.style.cssText = 'text-align: center; color: #FFD700; font-size: 11px; margin-top: 5px; opacity: 0.8;';
+      team1Label.textContent = canAlterTeam1 ? '✅ Seu time' : '🔒 Time Amarelo';
+      team1Side?.appendChild(team1Label);
+
+      const team2Label = document.createElement('div');
+      team2Label.id = 'team-ownership-label-2';
+      team2Label.style.cssText = 'text-align: center; color: #87CEEB; font-size: 11px; margin-top: 5px; opacity: 0.8;';
+      team2Label.textContent = canAlterTeam2 ? '✅ Seu time' : '🔒 Time Azul';
+      team2Side?.appendChild(team2Label);
+    }
+
+    // Pre-fill teams from gameConfig if needed
+    if (gameConfig.team1 && gameConfig.team2) {
+      window.team1Index = window.TEAMS.findIndex(t => t.id === gameConfig.team1.id);
+      window.team2Index = window.TEAMS.findIndex(t => t.id === gameConfig.team2.id);
+      window.selectedTeam1 = gameConfig.team1.id;
+      window.selectedTeam2 = gameConfig.team2.id;
+      window.updateTeamDisplay(1);
+      window.updateTeamDisplay(2);
+    }
+
+    // Pre-fill settings from gameConfig
+    if (gameConfig.mode) window.selectedMode = gameConfig.mode;
+    if (gameConfig.ball) window.selectedBall = gameConfig.ball;
+    if (gameConfig.rule) window.selectedRule = gameConfig.rule;
+    if (gameConfig.time) window.selectedTime = gameConfig.time;
+
+    // Update UI buttons to reflect settings
+    document.querySelectorAll('.stab[data-group="mode"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.mode);
+    });
+    document.querySelectorAll('.stab[data-group="ball"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.ball);
+    });
+    document.querySelectorAll('.stab[data-group="rule"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.rule);
+    });
+    document.querySelectorAll('.stab[data-group="time"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.time.toString());
+    });
+  });
+
+  // Remote team changed
+  window.addEventListener('multiplayer:teamChanged', (e) => {
+    console.log('[UI] 🔔 Received multiplayer:teamChanged event:', e.detail);
+    const { team1, team2 } = e.detail;
+    window.selectedTeam1 = team1;
+    window.selectedTeam2 = team2;
+    window.team1Index = window.TEAMS.findIndex(t => t.id === team1);
+    window.team2Index = window.TEAMS.findIndex(t => t.id === team2);
+    console.log('[UI] Updating team displays:', { team1Index: window.team1Index, team2Index: window.team2Index });
+    window.updateTeamDisplay(1);
+    window.updateTeamDisplay(2);
+  });
+
+  // Remote settings changed
+  window.addEventListener('multiplayer:settingsChanged', (e) => {
+    console.log('[UI] 🔔 Received multiplayer:settingsChanged event:', e.detail);
+    const { gameConfig } = e.detail;
+    // Update local settings to match remote changes
+    window.selectedMode = gameConfig.mode;
+    window.selectedBall = gameConfig.ball;
+    window.selectedRule = gameConfig.rule;
+    window.selectedTime = gameConfig.time;
+
+    console.log('[UI] Updated settings:', { mode: window.selectedMode, ball: window.selectedBall, rule: window.selectedRule, time: window.selectedTime });
+
+    // Update UI buttons
+    document.querySelectorAll('.stab[data-group="mode"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.mode);
+    });
+    document.querySelectorAll('.stab[data-group="ball"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.ball);
+    });
+    document.querySelectorAll('.stab[data-group="rule"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.rule);
+    });
+    document.querySelectorAll('.stab[data-group="time"]').forEach(b => {
+      b.classList.toggle('selected', b.dataset.value === gameConfig.time.toString());
+    });
+  });
+
+  // Settings error handling
+  window.addEventListener('multiplayer:settingsError', (e) => {
+    alert('Erro: ' + e.detail.message);
+  });
+
+  // Both players ready - start the game
+  window.addEventListener('multiplayer:bothPlayersReady', (e) => {
+    console.log('[UI] 🚀 Both players ready event received:', e.detail);
+    console.log('[UI] Calling startGameNow()');
+    window.startGameNow();
+  });
+
+  // Copy code button
+  document.getElementById('copy-code-btn').addEventListener('click', () => {
+    const code = document.getElementById('room-code-display').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      alert('Código copiado!');
+    }).catch(() => {
+      alert('Erro ao copiar código');
+    });
+  });
+
+  // Join room
+  document.getElementById('join-room-btn').addEventListener('click', () => {
+    show(JOIN_ROOM);
+    document.getElementById('room-code-input').focus();
+  });
+
+  document.getElementById('join-confirm-btn').addEventListener('click', async () => {
+    const code = document.getElementById('room-code-input').value.toUpperCase();
+    if (!code || code.length !== 4) {
+      alert('Digite um código válido');
+      return;
+    }
+
+    show(CREATE_ROOM);
+    document.getElementById('connecting-spinner').textContent = '⏳';
+
+    try {
+      await multiplayer.connect();
+      multiplayer.joinRoom(code);
+    } catch (error) {
+      console.error('Failed to connect:', error);
+      alert('Falha ao conectar: ' + error.message);
+      show(JOIN_ROOM);
+    }
+  });
+
+  // Join error
+  window.addEventListener('multiplayer:joinError', (e) => {
+    alert('Erro: ' + e.detail.message);
+    show(LOBBY);
+  });
+
+  // Opponent disconnected — sala mantida por um período de graça, esperando
+  // que o oponente reconecte (ex.: um F5 sem querer). O jogo já mostra o
+  // status "aguardando reconexão" (ver Game._onOpponentDisconnected).
+  window.addEventListener('multiplayer:opponentDisconnected', () => {
+    console.log('[UI] Oponente desconectou, aguardando reconexão...');
+  });
+
+  // Oponente voltou dentro do período de graça — nada a fazer na UI, o
+  // próprio jogo já despausa e retoma o status normal.
+  window.addEventListener('multiplayer:opponentReconnected', () => {
+    console.log('[UI] Oponente reconectou.');
+  });
+
+  // Período de graça expirou sem o oponente voltar — partida encerrada de vez
+  window.addEventListener('multiplayer:opponentLeft', () => {
+    alert('Oponente não reconectou a tempo. Partida encerrada.');
+    location.reload();
+  });
+
+  // ── Retomar partida após F5 acidental ──
+  window.addEventListener('multiplayer:rejoined', (e) => {
+    console.log('[UI] Reconectado à partida:', e.detail);
+    resumeMultiplayerMatch(window.__pendingResumeConfig);
+  });
+
+  window.addEventListener('multiplayer:rejoinFailed', (e) => {
+    console.warn('[UI] Falha ao reconectar:', e.detail?.message);
+    alert('Não foi possível retomar sua partida (' + (e.detail?.message || 'sala não encontrada') + ').');
+    show(MODE_SELECT);
+  });
+
+  function resumeMultiplayerMatch(gameConfig) {
+    hideAll();
+    if (!gameConfig) return;
+
+    const ruleMode = gameConfig.rule === '12-toques'
+      ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+      : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+    const gm = gameConfig.mode === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+             : gameConfig.mode === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+             : window.gameModule.GAME_MODES.STANDARD;
+
+    window.selectedTeam1 = gameConfig.team1;
+    window.selectedTeam2 = gameConfig.team2;
+    const t1 = window.TEAMS ? window.TEAMS.find(t => t.id === gameConfig.team1) : null;
+    const t2 = window.TEAMS ? window.TEAMS.find(t => t.id === gameConfig.team2) : null;
+    const teamConfig = (t1 && t2) ? { left: t1, right: t2 } : null;
+
+    window.gameModule.initGameMultiplayer(ruleMode, gameConfig.ball, gm, gameConfig.time * 60, multiplayer, teamConfig, { isReconnect: true });
+    window.gameInitialized = true;
+
+    if (t1 && t2) {
+      const badges = document.querySelectorAll('.tbadge');
+      badges[0].style.background = t1.css;
+      badges[1].style.background = t2.css;
+      document.getElementById('sy').style.color = t1.css;
+      document.getElementById('sb').style.color = t2.css;
+      document.getElementById('cam-goal-left-btn').textContent = '🥅 ' + t1.name;
+      document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
+    }
+  }
+
+  // Ao carregar a página, verifica se há uma partida online em andamento
+  // (sessão salva no sessionStorage) e tenta retomá-la automaticamente.
+  (async function tryAutoReconnect() {
+    const session = multiplayer.constructor.loadSession();
+    if (!session || !session.roomCode || !session.myTeam) return;
+
+    console.log('[UI] Sessão de partida encontrada, tentando reconectar...', session);
+    window.__pendingResumeConfig = session.gameConfig;
+    show(RECONNECTING);
+
+    try {
+      await multiplayer.connect();
+      multiplayer.rejoinRoom(session.roomCode, session.myTeam);
+    } catch (error) {
+      console.error('[UI] Falha ao reconectar:', error);
+      multiplayer.clearSession();
+      show(MODE_SELECT);
+    }
+  })();
+
+  // Back buttons
+  document.getElementById('back-to-mode-btn').addEventListener('click', () => {
+    show(MODE_SELECT);
+  });
+
+  document.getElementById('back-to-lobby-btn').addEventListener('click', () => {
+    show(LOBBY);
+  });
+
+  document.getElementById('cancel-room-btn').addEventListener('click', () => {
+    multiplayer.disconnect();
+    show(MODE_SELECT);
+  });
 </script>
 </body>
 </html>
