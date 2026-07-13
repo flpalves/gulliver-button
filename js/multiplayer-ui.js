@@ -84,7 +84,7 @@ export class MultiplayerUI {
     };
 
     // Conectar e criar sala
-    this.multiplayer.connect('http://localhost:3000');
+    this.multiplayer.connect();
     this.multiplayer.createRoom({
       gameMode: 'button_football',
       yellowTeam: 'flamengo',
@@ -127,7 +127,7 @@ export class MultiplayerUI {
     };
 
     // Conectar e entrar na sala
-    this.multiplayer.connect('http://localhost:3000');
+    this.multiplayer.connect();
     this.multiplayer.joinRoom(roomCode);
   }
 

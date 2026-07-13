@@ -2,13 +2,16 @@
  * js/multiplayer.js
  * Gerenciador de conexão multiplayer do cliente
  *
- * Responsável por:
- * - Passo 19: Conectar ao servidor via Socket.io
- * - Passo 20: Receber state_update
- * - Passo 21: Interpolar movimento visual
- * - Passo 22: Enviar player_input
- * - Passo 23: Sincronizar HUD
+ * Modelo: autoridade no cliente dono da vez.
+ * - O cliente com a posse (autoridade) simula a física e envia snapshots
+ *   (`physics_state`) ao servidor a ~20 Hz; o servidor repassa ao outro.
+ * - O cliente espectador pausa a física local e aplica os snapshots
+ *   recebidos com interpolação.
+ * - Quando a posse muda e a jogada termina (bola parada), o dono envia um
+ *   snapshot final com `handoff: true` e a autoridade passa ao outro lado.
  */
+
+const SESSION_KEY = 'gulliver_mp_session';
 
 export class MultiplayerManager {
   constructor() {
@@ -23,18 +26,31 @@ export class MultiplayerManager {
     this.interpolationAlpha = 0;
     this.lastStateTime = Date.now();
     this.isMyTurn = false;
+
+    // ── Autoridade da física (dono da vez) ──
+    this.isAuthority = false;         // true = eu simulo a física e envio snapshots
+    this.currentSnapshot = null;      // último snapshot recebido do oponente
+    this.previousSnapshot = null;     // snapshot anterior (para interpolação)
+    this.onPhysicsState = null;       // callback(snapshot) a cada snapshot recebido
+    this.onRemoteKeeperReposition = null;   // callback({playerIdx, x, z}) — goleiro do espectador movido
+
     this.onStateUpdated = null;
     this.onRoomReady = null;
     this.onOpponentDisconnected = null;
+    this.onOpponentReconnected = null;
+    this.onOpponentLeft = null;
     this.onConnected = null;
     this.onError = null;
     this.pendingRoomConfig = null;
     this.pendingRoomCodeToJoin = null;
+    this.pendingRejoin = null;
     console.log('[Multiplayer] Manager inicializado');
   }
 
   // PASSO 19: CONECTAR AO SERVIDOR
-  connect(serverUrl = 'http://localhost:3000') {
+  // Por padrão conecta na mesma origem que serviu a página (o Express serve
+  // cliente e Socket.io juntos), funcionando em qualquer porta/host.
+  connect(serverUrl = window.location.origin) {
     console.log(`[Multiplayer] Conectando a ${serverUrl}...`);
     if (typeof window.io === 'undefined') {
       console.error('[Multiplayer] Socket.io não carregado');
@@ -70,6 +86,12 @@ export class MultiplayerManager {
         this.socket.emit('join_room', this.pendingRoomCodeToJoin);
         this.pendingRoomCodeToJoin = null;
       }
+      // Se há uma reconexão pendente (ex.: F5 durante a partida), retomar agora
+      if (this.pendingRejoin) {
+        console.log('[Multiplayer] Reconectando à sala pendente:', this.pendingRejoin);
+        this.socket.emit('rejoin_room', this.pendingRejoin);
+        this.pendingRejoin = null;
+      }
     });
 
     this.socket.on('disconnect', () => {
@@ -101,35 +123,56 @@ export class MultiplayerManager {
       this._dispatch('roomReady', data);
     });
 
-    // PASSO 20: Receber state_update
-    this.socket.on('state_update', (state) => {
-      console.log('[Multiplayer] Received state_update from server:', {
-        ballPos: state?.ball?.pos,
-        possession: state?.possession,
-        yellowPlayers: state?.players?.yellow?.length,
-        bluePlayers: state?.players?.blue?.length
-      });
-
-      this.previousState = this.gameState;
-      this.gameState = state;
+    // Receber snapshot de física do oponente (via relay do servidor)
+    this.socket.on('physics_state', (snapshot) => {
+      if (!snapshot) return;
+      snapshot.receivedAt = performance.now();
+      this.previousSnapshot = this.currentSnapshot;
+      this.currentSnapshot = snapshot;
       this.lastStateTime = Date.now();
-      this.interpolationAlpha = 0;
-      // Atualizar se é minha vez
-      this.isMyTurn = state.possession === this.myTeam;
 
-      if (this.onStateUpdated) {
-        console.log('[Multiplayer] Calling onStateUpdated callback');
-        this.onStateUpdated(state);
-      } else {
-        console.warn('[Multiplayer] No onStateUpdated callback set!');
+      if (this.onPhysicsState) {
+        this.onPhysicsState(snapshot);
       }
     });
 
-    this.socket.on('opponent_disconnected', () => {
+    // Oponente caiu, mas a sala é mantida por um período de graça — o jogo
+    // continua pausado à espera de reconexão (ver `rejoin_room`).
+    this.socket.on('opponent_disconnected', (data) => {
+      console.log('[Multiplayer] Oponente desconectou (aguardando reconexão)', data);
+      if (this.onOpponentDisconnected) this.onOpponentDisconnected(data);
+      this._dispatch('opponentDisconnected', data);
+    });
+
+    // Oponente voltou dentro do período de graça
+    this.socket.on('opponent_reconnected', (data) => {
+      console.log('[Multiplayer] Oponente reconectou', data);
+      if (this.onOpponentReconnected) this.onOpponentReconnected(data);
+      this._dispatch('opponentReconnected', data);
+    });
+
+    // Período de graça expirou sem o oponente voltar — a sala foi encerrada
+    this.socket.on('opponent_left', (data) => {
       this.isActive = false;
-      console.log('[Multiplayer] Oponente desconectou');
-      if (this.onOpponentDisconnected) this.onOpponentDisconnected();
-      this._dispatch('opponentDisconnected', {});
+      this.clearSession();
+      console.log('[Multiplayer] Oponente não reconectou a tempo, sala encerrada', data);
+      if (this.onOpponentLeft) this.onOpponentLeft(data);
+      this._dispatch('opponentLeft', data);
+    });
+
+    // Resposta ao pedido de reconexão (ex.: depois de um F5)
+    this.socket.on('rejoin_success', (data) => {
+      this.isActive = true;
+      this.myTeam = data.myTeam || this.myTeam;
+      this.roomCode = data.roomCode;
+      console.log('[Multiplayer] Reconectado à sala com sucesso', data);
+      this._dispatch('rejoined', data);
+    });
+
+    this.socket.on('rejoin_failed', (data) => {
+      console.warn('[Multiplayer] Falha ao reconectar:', data.message);
+      this.clearSession();
+      this._dispatch('rejoinFailed', data);
     });
 
     this.socket.on('team_changed', (payload) => {
@@ -164,6 +207,14 @@ export class MultiplayerManager {
       }
     });
 
+    // Espectador reposicionando o próprio goleiro — só faz sentido aplicar
+    // se formos nós a autoridade da física agora (ver Game._onRemoteKeeperReposition).
+    this.socket.on('keeper_reposition', (payload) => {
+      if (this.onRemoteKeeperReposition) {
+        this.onRemoteKeeperReposition(payload);
+      }
+    });
+
     this.socket.on('error', (data) => {
       console.error('[Multiplayer] Erro:', data.message);
       if (this.onError) this.onError(data.message);
@@ -190,6 +241,46 @@ export class MultiplayerManager {
     }
     console.log('[Multiplayer] Emitindo join_room event...');
     this.socket.emit('join_room', roomCode);
+  }
+
+  // Retomar uma sala existente após perder a conexão (ex.: F5 sem querer).
+  rejoinRoom(roomCode, team) {
+    console.log('[Multiplayer] rejoinRoom chamado, roomCode:', roomCode, 'team:', team, 'isConnected:', this.isConnected);
+    if (!this.isConnected) {
+      this.pendingRejoin = { roomCode, team };
+      return;
+    }
+    this.socket.emit('rejoin_room', { roomCode, team });
+  }
+
+  // ── Persistência da sessão (permite retomar a partida depois de um F5) ──
+  saveSession(gameConfig) {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({
+        roomCode: this.roomCode,
+        myTeam: this.myTeam,
+        isRoomCreator: this.isRoomCreator,
+        gameConfig
+      }));
+    } catch (e) {
+      console.warn('[Multiplayer] Falha ao salvar sessão:', e);
+    }
+  }
+
+  static loadSession() {
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  clearSession() {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.removeItem(SESSION_KEY);
   }
 
   // PASSO 22: ENVIAR PLAYER INPUT
@@ -312,33 +403,27 @@ export class MultiplayerManager {
     console.log('[Multiplayer] Emitted player_ready');
   }
 
-  emitShotFired(playerIdx, impulse, bodyStates) {
-    console.log('[Multiplayer] emitShotFired called:', {
-      playerIdx,
-      isActive: this.isActive,
-      socketExists: !!this.socket,
-      socketConnected: this.socket?.connected,
-      socketId: this.socket?.id?.substring(0, 8)
-    });
-
-    if (!this.isActive) {
-      console.warn('[Multiplayer] ❌ Not active, not emitting');
-      return;
-    }
-
-    if (!this.socket) {
-      console.warn('[Multiplayer] ❌ Socket is null, not emitting');
-      return;
-    }
-
-    console.log('[Multiplayer] ✅ Emitting shot_fired...');
+  // Cue de chute para o espectador (som/UI) — a física em si viaja via snapshots
+  emitShotFired(playerIdx, impulse) {
+    if (!this.isActive || !this.socket) return;
     this.socket.emit('shot_fired', {
       playerIdx,
       impulse,
-      bodyStates,
       timestamp: Date.now()
     });
-    console.log('[Multiplayer] ✅ Emitted shot_fired:', { playerIdx, impulse });
+  }
+
+  // Enviar snapshot de física ao servidor (apenas quando somos a autoridade)
+  sendPhysicsState(snapshot) {
+    if (!this.isActive || !this.socket) return;
+    this.socket.emit('physics_state', snapshot);
+  }
+
+  // Reposicionamento livre do próprio goleiro enquanto somos espectador (sem
+  // autoridade de física) — o dono da vez aplica direto na simulação dele.
+  emitKeeperReposition(playerIdx, x, z) {
+    if (!this.isActive || !this.socket) return;
+    this.socket.emit('keeper_reposition', { playerIdx, x, z });
   }
 
   _dispatch(eventName, detail) {
@@ -353,6 +438,7 @@ export class MultiplayerManager {
       this.isConnected = false;
       console.log('[Multiplayer] Desconectado');
     }
+    this.clearSession();
   }
 }
 

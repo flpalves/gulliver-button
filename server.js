@@ -4,7 +4,6 @@ import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import * as CANNON from 'cannon-es';
 import { GameRoom } from './GameRoom.js';
 
 dotenv.config();
@@ -41,7 +40,8 @@ app.get('/health', (req, res) => {
 // ============================================
 // GERENCIADOR DE SALAS
 // ============================================
-const rooms = new Map(); // { roomCode: { yellowSocketId, blueSocketId, config, gameRoom } }
+const rooms = new Map(); // { roomCode: { yellowSocketId, blueSocketId, config, gameRoom, disconnectTimers } }
+const RECONNECT_GRACE_MS = 30000; // tempo que a sala espera por uma reconexão (ex.: F5 sem querer)
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -84,7 +84,8 @@ io.on('connection', (socket) => {
       blueSocketId: null,
       config: data.gameConfig || {},
       gameRoom: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      disconnectTimers: { yellow: null, blue: null }
     });
 
     socket.emit('room_created', { roomCode, config: data.gameConfig });
@@ -148,79 +149,95 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // EVENTO: Player Input
+  // EVENTO: Reconectar a uma sala (ex.: F5 sem querer durante a partida)
   // ==========================================
-  socket.on('player_input', (inputData) => {
-    const room = findRoomBySocket(socket.id);
-    if (!room || !room.gameRoom) {
+  socket.on('rejoin_room', ({ roomCode, team } = {}) => {
+    const room = rooms.get(roomCode);
+
+    if (!room || (team !== 'yellow' && team !== 'blue')) {
+      socket.emit('rejoin_failed', { message: 'Sala não encontrada' });
+      console.warn(`[Rejoin Failed] Sala ${roomCode} não encontrada`);
       return;
     }
 
-    const team = socket.id === room.gameRoom.yellowSocketId ? 'yellow' : 'blue';
-    room.gameRoom.receiveInput(team, inputData);
+    const currentSocketId = team === 'yellow' ? room.yellowSocketId : room.blueSocketId;
+    if (currentSocketId !== null) {
+      socket.emit('rejoin_failed', { message: 'Este time já está conectado' });
+      console.warn(`[Rejoin Failed] Time ${team} da sala ${roomCode} já está conectado`);
+      return;
+    }
+
+    // Cancela o timer de expiração da sala e reocupa o slot com o novo socket
+    if (room.disconnectTimers[team]) {
+      clearTimeout(room.disconnectTimers[team]);
+      room.disconnectTimers[team] = null;
+    }
+
+    if (team === 'yellow') room.yellowSocketId = socket.id;
+    else room.blueSocketId = socket.id;
+
+    if (room.gameRoom) {
+      if (team === 'yellow') room.gameRoom.yellowSocketId = socket.id;
+      else room.gameRoom.blueSocketId = socket.id;
+    }
+
+    socket.emit('rejoin_success', { myTeam: team, roomCode, config: room.config });
+
+    const otherSocketId = team === 'yellow' ? room.blueSocketId : room.yellowSocketId;
+    const otherSocket = otherSocketId ? io.sockets.sockets.get(otherSocketId) : null;
+    otherSocket?.emit('opponent_reconnected', { team });
+
+    console.log(`[Rejoined] ${team} reconectou à sala ${roomCode}`);
   });
 
   // ==========================================
-  // EVENTO: Shot Fired (processar no GameRoom e retransmitir)
+  // EVENTO: Physics State (relay puro)
+  // O cliente dono da vez simula a física e envia snapshots (~20 Hz).
+  // O servidor apenas repassa ao outro cliente, sem simular nada.
+  // ==========================================
+  socket.on('physics_state', (snapshot) => {
+    const room = findRoomBySocket(socket.id);
+    if (!room || !room.gameRoom) return;
+
+    // Atualiza (informativo) qual time detém a autoridade
+    if (snapshot?.game?.possession) {
+      room.gameRoom.authorityTeam = snapshot.game.possession;
+    }
+
+    const otherSocketId = room.gameRoom.opponentSocketId(socket.id);
+    const otherSocket = otherSocketId ? io.sockets.sockets.get(otherSocketId) : null;
+    if (otherSocket) {
+      otherSocket.emit('physics_state', snapshot);
+    }
+  });
+
+  // ==========================================
+  // EVENTO: Shot Fired (relay puro — usado como cue de som/UI no espectador)
   // ==========================================
   socket.on('shot_fired', (payload) => {
-    console.log(`[Shot Fired] ✅ SERVER RECEIVED shot_fired event!`);
-    console.log(`[Shot Fired] Socket ID: ${socket.id.substring(0, 8)}`);
-    console.log(`[Shot Fired] Payload:`, JSON.stringify(payload, null, 2));
-
     const room = findRoomBySocket(socket.id);
-    if (!room || !room.gameRoom) {
-      console.warn('[Shot Fired] ❌ Room or gameRoom not found!');
-      return;
-    }
+    if (!room || !room.gameRoom) return;
 
-    console.log(`[Shot Fired] RECEIVED in ${room.code}: playerIdx=${payload.playerIdx}`);
-    console.log(`[Shot Fired] Payload:`, { playerIdx: payload.playerIdx, impulse: payload.impulse });
-
-    // Converter índice global para índice dentro do time
-    // playerIdx 0-10 = yellow, 11-21 = blue
-    let team, localIdx;
-    if (payload.playerIdx < 11) {
-      team = 'yellow';
-      localIdx = payload.playerIdx;
-    } else {
-      team = 'blue';
-      localIdx = payload.playerIdx - 11;
-    }
-
-    console.log(`[Shot Fired] Mapped to ${team}[${localIdx}]`);
-
-    const playersArray = room.gameRoom.gameState.players[team];
-    console.log(`[Shot Fired] Team "${team}" has ${playersArray ? playersArray.length : 'UNDEFINED'} players`);
-
-    const player = playersArray ? playersArray[localIdx] : null;
-    console.log(`[Shot Fired] Player found:`, !!player, 'Has physBody:', player?.physBody ? '✓' : '✗');
-
-    if (!player) {
-      console.warn(`[Shot Fired] ❌ Player not found at ${team}[${localIdx}]`);
-      return;
-    }
-
-    if (!payload.impulse) {
-      console.warn(`[Shot Fired] ❌ No impulse in payload`);
-      return;
-    }
-
-    console.log(`[Shot Fired] ✅ Applying impulse:`, payload.impulse);
-    player.physBody.velocity.set(0, 0, 0);
-    player.physBody.applyImpulse(
-      new CANNON.Vec3(payload.impulse.x, payload.impulse.y, payload.impulse.z),
-      player.physBody.position
-    );
-    console.log(`[Shot Fired] ✅ Impulse applied!`);
-
-    // Retransmitir para o outro player também
-    const yellowSocket = io.sockets.sockets.get(room.yellowSocketId);
-    const blueSocket = io.sockets.sockets.get(room.blueSocketId);
-    const otherSocket = socket.id === room.yellowSocketId ? blueSocket : yellowSocket;
-
+    const otherSocketId = room.gameRoom.opponentSocketId(socket.id);
+    const otherSocket = otherSocketId ? io.sockets.sockets.get(otherSocketId) : null;
     if (otherSocket) {
       otherSocket.emit('shot_fired', payload);
+    }
+  });
+
+  // ==========================================
+  // EVENTO: Keeper Reposition (relay puro)
+  // O espectador move o próprio goleiro a qualquer momento; o servidor só
+  // repassa para o dono da vez aplicar na simulação real dele.
+  // ==========================================
+  socket.on('keeper_reposition', (payload) => {
+    const room = findRoomBySocket(socket.id);
+    if (!room || !room.gameRoom) return;
+
+    const otherSocketId = room.gameRoom.opponentSocketId(socket.id);
+    const otherSocket = otherSocketId ? io.sockets.sockets.get(otherSocketId) : null;
+    if (otherSocket) {
+      otherSocket.emit('keeper_reposition', payload);
     }
   });
 
@@ -255,10 +272,9 @@ io.on('connection', (socket) => {
 
     // Se ambos estão prontos, iniciar o jogo
     if (yellowSocket && blueSocket) {
-      // Iniciar o GameRoom AQUI (física começa apenas quando ambos estão prontos!)
       if (room.gameRoom && !room.gameRoom.isRunning) {
-        console.log(`[Game Start] Iniciando GameRoom e física...`);
-        room.gameRoom.start(io);
+        console.log(`[Game Start] Iniciando GameRoom (relay)...`);
+        room.gameRoom.start();
       }
 
       yellowSocket.emit('both_players_ready', {});
@@ -274,41 +290,43 @@ io.on('connection', (socket) => {
     const room = findRoomBySocket(socket.id);
 
     if (room) {
-      const otherTeam = socket.id === room.yellowSocketId ? room.blueSocketId : room.yellowSocketId;
+      const team = socket.id === room.yellowSocketId ? 'yellow' : 'blue';
+      const roomEntry = rooms.get(room.code);
 
-      if (otherTeam) {
-        const otherSocket = io.sockets.sockets.get(otherTeam);
-        if (otherSocket) {
-          otherSocket.emit('opponent_disconnected', {
-            message: 'Seu oponente desconectou'
-          });
+      if (roomEntry) {
+        if (team === 'yellow') roomEntry.yellowSocketId = null;
+        else roomEntry.blueSocketId = null;
+        if (roomEntry.gameRoom) {
+          if (team === 'yellow') roomEntry.gameRoom.yellowSocketId = null;
+          else roomEntry.gameRoom.blueSocketId = null;
+        }
+
+        const otherSocketId = team === 'yellow' ? roomEntry.blueSocketId : roomEntry.yellowSocketId;
+        const otherSocket = otherSocketId ? io.sockets.sockets.get(otherSocketId) : null;
+
+        if (!otherSocket) {
+          // Ninguém mais na sala — encerra imediatamente
+          rooms.delete(room.code);
+          console.log(`[Room Deleted] ${room.code} (ambos jogadores fora)`);
+        } else {
+          // Dá um período de graça para o jogador reconectar (ex.: F5 sem querer)
+          const waitSeconds = RECONNECT_GRACE_MS / 1000;
+          otherSocket.emit('opponent_disconnected', { team, waitSeconds });
+
+          roomEntry.disconnectTimers[team] = setTimeout(() => {
+            otherSocket.emit('opponent_left', { team });
+            rooms.delete(room.code);
+            console.log(`[Room Deleted] ${room.code} (reconexão de ${team} expirou)`);
+          }, RECONNECT_GRACE_MS);
+
+          console.log(`[Disconnected] ${team} em ${room.code} — aguardando reconexão (${waitSeconds}s)`);
         }
       }
-
-      rooms.delete(room.code);
-      console.log(`[Room Deleted] ${room.code}`);
     }
 
     console.log(`[Disconnected] ${socket.id.substring(0, 8)}`);
   });
 });
-
-// ============================================
-// PASSO 11-12: TICK LOOP GLOBAL (60 FPS)
-// ============================================
-const TICK_RATE = 60;
-const TICK_INTERVAL = 1000 / TICK_RATE; // ~16ms
-
-console.log(`[TickLoop] Global loop iniciando: ${TICK_RATE} FPS`);
-
-setInterval(() => {
-  for (const [roomCode, room] of rooms) {
-    if (room.gameRoom && room.gameRoom.isRunning) {
-      // PASSO 12: Broadcast estado para ambos clientes
-      room.gameRoom.broadcast(io);
-    }
-  }
-}, TICK_INTERVAL);
 
 // ============================================
 // INICIAR SERVIDOR

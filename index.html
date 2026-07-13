@@ -90,6 +90,18 @@
   </div>
 </div>
 
+<div id="reconnecting-overlay" class="hidden">
+  <div class="menu-box" style="max-width: 400px;">
+    <div class="menu-header">
+      <div class="menu-title" style="font-size: 18px;">Reconectando...</div>
+    </div>
+    <div style="padding: 30px 20px; text-align: center;">
+      <div style="color: #fff; margin-bottom: 15px;">Retomando sua partida online...</div>
+      <div style="font-size: 40px; animation: spin 1s linear infinite;">⚙️</div>
+    </div>
+  </div>
+</div>
+
 <div id="waiting-room-overlay" class="hidden">
   <div class="menu-box" style="max-width: 450px;">
     <div class="menu-header">
@@ -411,9 +423,20 @@
 
       var t1 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam1; }) : null;
       var t2 = window.TEAMS ? window.TEAMS.find(function(t){ return t.id === window.selectedTeam2; }) : null;
+      var teamConfig = (t1 && t2) ? { left: t1, right: t2 } : null;
 
-      window.gameModule.initGameMultiplayer(ruleMode, window.selectedBall, gm, window.selectedTime * 60, multiplayer);
+      window.gameModule.initGameMultiplayer(ruleMode, window.selectedBall, gm, window.selectedTime * 60, multiplayer, teamConfig);
       window.gameInitialized = true;
+
+      // Guarda a sessão para permitir retomar a partida em caso de F5 acidental
+      multiplayer.saveSession({
+        mode: window.selectedMode,
+        ball: window.selectedBall,
+        rule: window.selectedRule,
+        time: window.selectedTime,
+        team1: window.selectedTeam1,
+        team2: window.selectedTeam2
+      });
 
       if (t1 && t2) {
         var badges = document.querySelectorAll('.tbadge');
@@ -455,6 +478,7 @@
   const WAITING_ROOM = document.getElementById('waiting-room-overlay');
   const JOIN_ROOM = document.getElementById('join-room-overlay');
   const MENU = document.getElementById('menu-overlay');
+  const RECONNECTING = document.getElementById('reconnecting-overlay');
 
   function hideAll() {
     MODE_SELECT.classList.add('hidden');
@@ -463,6 +487,7 @@
     WAITING_ROOM.classList.add('hidden');
     JOIN_ROOM.classList.add('hidden');
     MENU.classList.add('hidden');
+    RECONNECTING.classList.add('hidden');
   }
 
   function show(overlay) {
@@ -554,6 +579,26 @@
       label.style.cssText = 'text-align: center; color: #aaa; font-size: 12px; margin-top: 10px;';
       label.textContent = isBluePlayer ? '🔒 Somente o criador da sala pode alterar as configurações' : '⚙️ Você é o criador da sala';
       document.querySelector('.menu-settings-bar').appendChild(label);
+    }
+
+    // Mostra o código da sala para o criador poder compartilhar com o oponente
+    if (!isBluePlayer && multiplayer.roomCode && !document.getElementById('menu-room-code-info')) {
+      const codeBox = document.createElement('div');
+      codeBox.id = 'menu-room-code-info';
+      codeBox.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 10px; text-align: center; margin-top: 10px;';
+      codeBox.innerHTML =
+        '<span style="color: #aaa; font-size: 12px;">Código da sala:</span>' +
+        '<span style="color: #FFD700; font-weight: bold; font-size: 16px; letter-spacing: 2px;">' + multiplayer.roomCode + '</span>' +
+        '<button id="menu-copy-code-btn" style="padding: 4px 10px; background: #FFD700; color: #000; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">📋 Copiar</button>';
+      document.querySelector('.menu-settings-bar').appendChild(codeBox);
+
+      document.getElementById('menu-copy-code-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(multiplayer.roomCode).then(() => {
+          alert('Código copiado!');
+        }).catch(() => {
+          alert('Erro ao copiar código');
+        });
+      });
     }
 
     // Disable team selection for opponent's team
@@ -717,11 +762,87 @@
     show(LOBBY);
   });
 
-  // Opponent disconnected
+  // Opponent disconnected — sala mantida por um período de graça, esperando
+  // que o oponente reconecte (ex.: um F5 sem querer). O jogo já mostra o
+  // status "aguardando reconexão" (ver Game._onOpponentDisconnected).
   window.addEventListener('multiplayer:opponentDisconnected', () => {
-    alert('Oponente desconectou!');
+    console.log('[UI] Oponente desconectou, aguardando reconexão...');
+  });
+
+  // Oponente voltou dentro do período de graça — nada a fazer na UI, o
+  // próprio jogo já despausa e retoma o status normal.
+  window.addEventListener('multiplayer:opponentReconnected', () => {
+    console.log('[UI] Oponente reconectou.');
+  });
+
+  // Período de graça expirou sem o oponente voltar — partida encerrada de vez
+  window.addEventListener('multiplayer:opponentLeft', () => {
+    alert('Oponente não reconectou a tempo. Partida encerrada.');
     location.reload();
   });
+
+  // ── Retomar partida após F5 acidental ──
+  window.addEventListener('multiplayer:rejoined', (e) => {
+    console.log('[UI] Reconectado à partida:', e.detail);
+    resumeMultiplayerMatch(window.__pendingResumeConfig);
+  });
+
+  window.addEventListener('multiplayer:rejoinFailed', (e) => {
+    console.warn('[UI] Falha ao reconectar:', e.detail?.message);
+    alert('Não foi possível retomar sua partida (' + (e.detail?.message || 'sala não encontrada') + ').');
+    show(MODE_SELECT);
+  });
+
+  function resumeMultiplayerMatch(gameConfig) {
+    hideAll();
+    if (!gameConfig) return;
+
+    const ruleMode = gameConfig.rule === '12-toques'
+      ? window.gameModule.RULE_MODES.TWELVE_TOUCHES
+      : window.gameModule.RULE_MODES.FOUR_TOUCHES;
+    const gm = gameConfig.mode === 'society' ? window.gameModule.GAME_MODES.SOCIETY
+             : gameConfig.mode === 'showbol' ? window.gameModule.GAME_MODES.SHOWBOL
+             : window.gameModule.GAME_MODES.STANDARD;
+
+    window.selectedTeam1 = gameConfig.team1;
+    window.selectedTeam2 = gameConfig.team2;
+    const t1 = window.TEAMS ? window.TEAMS.find(t => t.id === gameConfig.team1) : null;
+    const t2 = window.TEAMS ? window.TEAMS.find(t => t.id === gameConfig.team2) : null;
+    const teamConfig = (t1 && t2) ? { left: t1, right: t2 } : null;
+
+    window.gameModule.initGameMultiplayer(ruleMode, gameConfig.ball, gm, gameConfig.time * 60, multiplayer, teamConfig, { isReconnect: true });
+    window.gameInitialized = true;
+
+    if (t1 && t2) {
+      const badges = document.querySelectorAll('.tbadge');
+      badges[0].style.background = t1.css;
+      badges[1].style.background = t2.css;
+      document.getElementById('sy').style.color = t1.css;
+      document.getElementById('sb').style.color = t2.css;
+      document.getElementById('cam-goal-left-btn').textContent = '🥅 ' + t1.name;
+      document.getElementById('cam-goal-right-btn').textContent = '🥅 ' + t2.name;
+    }
+  }
+
+  // Ao carregar a página, verifica se há uma partida online em andamento
+  // (sessão salva no sessionStorage) e tenta retomá-la automaticamente.
+  (async function tryAutoReconnect() {
+    const session = multiplayer.constructor.loadSession();
+    if (!session || !session.roomCode || !session.myTeam) return;
+
+    console.log('[UI] Sessão de partida encontrada, tentando reconectar...', session);
+    window.__pendingResumeConfig = session.gameConfig;
+    show(RECONNECTING);
+
+    try {
+      await multiplayer.connect();
+      multiplayer.rejoinRoom(session.roomCode, session.myTeam);
+    } catch (error) {
+      console.error('[UI] Falha ao reconectar:', error);
+      multiplayer.clearSession();
+      show(MODE_SELECT);
+    }
+  })();
 
   // Back buttons
   document.getElementById('back-to-mode-btn').addEventListener('click', () => {

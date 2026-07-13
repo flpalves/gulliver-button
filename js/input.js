@@ -29,6 +29,12 @@ export class InputHandler {
     this.anchor = null;       // THREE.Vector3 — piece position when drag started
     this.pendingDir = null;   // THREE.Vector3 — current drag vector (anchor → cursor)
 
+    // Multiplayer: true while dragging our own keeper as a spectator (no local
+    // physics authority) — the position is mirrored to the opponent instead
+    // of being resolved by our own (paused) physics simulation.
+    this._dragIsRemoteKeeper = false;
+    this._lastKeeperSendTime = 0;
+
     this._buildForceLine();
     this._buildTrajectory();
 
@@ -130,20 +136,22 @@ export class InputHandler {
   _onDown(e) {
     if (e.button !== 0 || this.dragging) return;
 
-    // Block input if multiplayer and not my turn
-    if (this.multiplayer && this.multiplayer.isActive) {
-      console.log('[Input] Multiplayer active. isMyTurn:', this.multiplayer.isMyTurn, 'myTeam:', this.multiplayer.myTeam);
-      if (!this.multiplayer.isMyTurn) {
-        console.log('[Input] Not my turn, blocking input');
-        return;
-      }
-    }
-
     const piece = this._pieceAt(e);
     console.log('[Input] Piece at cursor:', piece?.team, piece?.playerIndex);
 
     if (!piece) {
       console.log('[Input] No piece at cursor');
+      return;
+    }
+
+    // Block input if multiplayer and not my turn — except our own keeper,
+    // who (like in singleplayer) can be repositioned at any time, even while
+    // the opponent holds physics authority. That case is handled specially
+    // below since our local physics is paused while spectating.
+    const mp = this.multiplayer;
+    const isOwnFreeKeeper = mp && mp.isActive && piece.isKeeper && piece.team === mp.myTeam;
+    if (mp && mp.isActive && !mp.isMyTurn && !isOwnFreeKeeper) {
+      console.log('[Input] Not my turn, blocking input');
       return;
     }
 
@@ -154,6 +162,7 @@ export class InputHandler {
 
     this.dragging = piece;
     this.dragMode = this.rules.isReposition(piece) ? 'reposition' : 'shot';
+    this._dragIsRemoteKeeper = !!(mp && mp.isActive && !mp.isAuthority && isOwnFreeKeeper);
 
     if (this.dragMode === 'shot') {
       this.anchor = new THREE.Vector3(piece.group.position.x, 0.07, piece.group.position.z);
@@ -230,6 +239,20 @@ export class InputHandler {
     body.position.x = x;
     body.position.z = z;
     body.velocity.set(0, 0, 0);
+
+    // Spectating while dragging our own keeper: our physics is paused (the
+    // opponent is the authority), so mirror this position to them instead —
+    // they apply it directly to their live simulation of this piece.
+    if (this._dragIsRemoteKeeper) this._sendKeeperPosition(piece, x, z);
+  }
+
+  _sendKeeperPosition(piece, x, z, force = false) {
+    const mp = this.multiplayer;
+    if (!mp) return;
+    const now = performance.now();
+    if (!force && now - this._lastKeeperSendTime < 50) return;   // throttle to ~20 Hz
+    this._lastKeeperSendTime = now;
+    mp.emitKeeperReposition(this.players.indexOf(piece), x, z);
   }
 
   _clampKeeper(piece, x, z) {
@@ -259,6 +282,10 @@ export class InputHandler {
       piece.physBody.position.y = piece.restY;
       piece.group.position.y = 0;
       this.rules.onReposition(piece);
+      if (this._dragIsRemoteKeeper) {
+        this._sendKeeperPosition(piece, piece.physBody.position.x, piece.physBody.position.z, true);
+        this._dragIsRemoteKeeper = false;
+      }
       return;
     }
 
@@ -275,19 +302,15 @@ export class InputHandler {
 
     const impulse = { x: dir.x * impulseMag, y: 0, z: dir.z * impulseMag };
 
-    // In multiplayer: DO NOT apply impulse locally, server is authority
-    // The server will receive shot_fired and apply it to its physics simulation
-    if (this.multiplayer && this.multiplayer.isActive) {
-      // Multiplayer: send to server only
-      this.rules.onShotFired(piece, impulse);
-    } else {
-      // Local mode: apply physics locally
-      piece.physBody.velocity.set(0, 0, 0);
-      piece.physBody.applyImpulse(
-        new CANNON.Vec3(impulse.x, impulse.y, impulse.z),
-        piece.physBody.position
-      );
-      this.rules.onShotFired(piece, impulse);
-    }
+    // A física roda sempre no cliente que chuta: em modo local somos a única
+    // simulação; em multiplayer somos o dono da vez (autoridade) — o input só
+    // chega até aqui quando isMyTurn é true. O movimento resultante viaja
+    // para o oponente via snapshots (physics_state).
+    piece.physBody.velocity.set(0, 0, 0);
+    piece.physBody.applyImpulse(
+      new CANNON.Vec3(impulse.x, impulse.y, impulse.z),
+      piece.physBody.position
+    );
+    this.rules.onShotFired(piece, impulse);
   }
 }
