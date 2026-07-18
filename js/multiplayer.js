@@ -200,6 +200,11 @@ export class MultiplayerManager {
       this._dispatch('bothPlayersReady', data);
     });
 
+    this.socket.on('opponent_ready', (data) => {
+      console.log('[Multiplayer] Oponente está pronto', data);
+      this._dispatch('opponentReady', data);
+    });
+
     this.socket.on('shot_fired', (payload) => {
       console.log('[Multiplayer] 📤 RECEIVED shot_fired:', payload);
       if (this.onRemoteShotFired) {

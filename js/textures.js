@@ -73,7 +73,8 @@ export function makePlayerTexture(playerIndex, teamColorHex, teamId) {
   const tex = new THREE.CanvasTexture(_buildAvatarCanvas(playerIndex, teamColorHex));
   _cache.set(key, tex);
 
-  // Try individual PNG first; if missing and it's an outfield player, try players.png
+  // Try individual PNG first; if missing and it's an outfield player, try all.png (sprite sheet)
+  // then players.png (single-frame fallback with number drawn on top).
   _loader.load(
     `assets/players/${teamId}/${playerIndex}.png`,
     (loaded) => {
@@ -83,24 +84,52 @@ export function makePlayerTexture(playerIndex, teamColorHex, teamId) {
     undefined,
     playerIndex >= 2 ? () => {
       _loader.load(
-        `assets/players/${teamId}/players.png`,
+        `assets/players/${teamId}/all.png`,
         (loaded) => {
-          const S = 256, cx = S / 2;
+          // Sprite sheet: always 5 columns x 2 rows, one cell per outfield player (index 2-11).
+          const COLS = 5, ROWS = 2;
+          const cellIdx = playerIndex - 2;
+          const col = cellIdx % COLS;
+          const row = Math.floor(cellIdx / COLS);
+          const img = loaded.image;
+          const cellW = img.width / COLS;
+          const cellH = img.height / ROWS;
+
           const cv = document.createElement('canvas');
-          cv.width = cv.height = S;
+          cv.width = cellW;
+          cv.height = cellH;
           const ctx = cv.getContext('2d');
-          ctx.drawImage(loaded.image, 0, 0, S, S);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = `bold ${Math.round(S * 0.30)}px Arial, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(String(playerIndex), cx, S * 0.725);
+          ctx.drawImage(
+            img,
+            col * cellW, row * cellH, cellW, cellH,
+            0, 0, cellW, cellH
+          );
           tex.image = cv;
           tex.needsUpdate = true;
         },
         undefined,
         () => {
-          // If both individual and players.png fail, use procedural (already set as placeholder)
+          _loader.load(
+            `assets/players/${teamId}/players.png`,
+            (loaded) => {
+              const S = 256, cx = S / 2;
+              const cv = document.createElement('canvas');
+              cv.width = cv.height = S;
+              const ctx = cv.getContext('2d');
+              ctx.drawImage(loaded.image, 0, 0, S, S);
+              ctx.fillStyle = '#ffffff';
+              ctx.font = `bold ${Math.round(S * 0.30)}px Arial, sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(String(playerIndex), cx, S * 0.725);
+              tex.image = cv;
+              tex.needsUpdate = true;
+            },
+            undefined,
+            () => {
+              // If individual, all.png, and players.png all fail, use procedural (already set as placeholder)
+            }
+          );
         }
       );
     } : undefined

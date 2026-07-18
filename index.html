@@ -720,6 +720,24 @@
     window.startGameNow();
   });
 
+  // Opponent clicked "pronto" first — let them know while we still wait for us
+  window.addEventListener('multiplayer:opponentReady', (e) => {
+    console.log('[UI] Oponente está pronto:', e.detail);
+    var startBtn = document.querySelector('.menu-start-btn');
+    var waitingOverlay = document.getElementById('waiting-both-players-overlay');
+    if (waitingOverlay) {
+      // We're already waiting too — both are now ready, startGameNow() is imminent
+      var msg = waitingOverlay.querySelector('div div');
+      if (msg) msg.textContent = '⏳ Oponente pronto! Iniciando...';
+    } else if (startBtn && !document.getElementById('opponent-ready-hint')) {
+      var hint = document.createElement('div');
+      hint.id = 'opponent-ready-hint';
+      hint.style.cssText = 'text-align: center; color: #4CAF50; font-size: 12px; margin-top: 8px;';
+      hint.textContent = '✅ Seu oponente já está pronto — clique em JOGAR para começar';
+      startBtn.insertAdjacentElement('afterend', hint);
+    }
+  });
+
   // Copy code button
   document.getElementById('copy-code-btn').addEventListener('click', () => {
     const code = document.getElementById('room-code-display').textContent;

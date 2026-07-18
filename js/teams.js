@@ -11,7 +11,7 @@ export const TEAMS = [
   { id: 'gremio',      name: 'Grêmio',        color: '#1755AA', rimColor: '#111111', css: '#1755AA' },
   { id: 'atletico',    name: 'Atlético MG',   color: '#111111', rimColor: '#555555', css: '#111111' },
   { id: 'cruzeiro',    name: 'Cruzeiro',      color: '#0033BB', rimColor: '#001F88', css: '#0033BB' },
-  { id: 'fluminense',  name: 'Fluminense',    color: '#8B1A28', rimColor: '#500D15', css: '#8B1A28' },
+  { id: 'fluminense',  name: 'Fluminense',    color: '#114e02', rimColor: '#500D15', css: '#8B1A28' },
   { id: 'santos',      name: 'Santos',        color: '#F0F0F0', rimColor: '#333333', css: '#F0F0F0' },
   { id: 'botafogo',    name: 'Botafogo',      color: '#151515', rimColor: '#DDDDDD', css: '#151515' },
   { id: 'vasco',       name: 'Vasco',         color: '#222222', rimColor: '#999999', css: '#222222' },

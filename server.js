@@ -85,7 +85,8 @@ io.on('connection', (socket) => {
       config: data.gameConfig || {},
       gameRoom: null,
       createdAt: Date.now(),
-      disconnectTimers: { yellow: null, blue: null }
+      disconnectTimers: { yellow: null, blue: null },
+      ready: { yellow: false, blue: false }
     });
 
     socket.emit('room_created', { roomCode, config: data.gameConfig });
@@ -265,13 +266,25 @@ io.on('connection', (socket) => {
     const room = findRoomBySocket(socket.id);
     if (!room) return;
 
-    console.log(`[Player Ready] ${socket.id.substring(0, 8)} in ${room.code}`);
+    const roomEntry = rooms.get(room.code);
+    if (!roomEntry) return;
 
-    const yellowSocket = io.sockets.sockets.get(room.yellowSocketId);
-    const blueSocket = io.sockets.sockets.get(room.blueSocketId);
+    const team = socket.id === roomEntry.yellowSocketId ? 'yellow'
+      : socket.id === roomEntry.blueSocketId ? 'blue' : null;
+    if (!team) return;
 
-    // Se ambos estão prontos, iniciar o jogo
-    if (yellowSocket && blueSocket) {
+    roomEntry.ready[team] = true;
+    console.log(`[Player Ready] ${team} (${socket.id.substring(0, 8)}) in ${room.code}`);
+
+    const yellowSocket = io.sockets.sockets.get(roomEntry.yellowSocketId);
+    const blueSocket = io.sockets.sockets.get(roomEntry.blueSocketId);
+
+    // Avisa o oponente que este jogador já está pronto (para UI de espera)
+    const opponentSocket = team === 'yellow' ? blueSocket : yellowSocket;
+    opponentSocket?.emit('opponent_ready', { team });
+
+    // Só inicia quando AMBOS os times clicaram em "pronto"
+    if (roomEntry.ready.yellow && roomEntry.ready.blue && yellowSocket && blueSocket) {
       if (room.gameRoom && !room.gameRoom.isRunning) {
         console.log(`[Game Start] Iniciando GameRoom (relay)...`);
         room.gameRoom.start();
@@ -296,6 +309,11 @@ io.on('connection', (socket) => {
       if (roomEntry) {
         if (team === 'yellow') roomEntry.yellowSocketId = null;
         else roomEntry.blueSocketId = null;
+
+        // Se o jogo ainda não começou, desconectar cancela o "pronto" desse time
+        if (!roomEntry.gameRoom || !roomEntry.gameRoom.isRunning) {
+          roomEntry.ready[team] = false;
+        }
         if (roomEntry.gameRoom) {
           if (team === 'yellow') roomEntry.gameRoom.yellowSocketId = null;
           else roomEntry.gameRoom.blueSocketId = null;

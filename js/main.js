@@ -25,7 +25,7 @@ const SNAPSHOT_INTERVAL_MS = 50;   // ~20 Hz
 
 const _stadiumAudio = new Audio('assets/stadium.mp3');
 _stadiumAudio.loop = true;
-_stadiumAudio.volume = 0.5;
+_stadiumAudio.volume = 0.3;
 
 function init(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere', gameMode = GAME_MODES.STANDARD, halfSeconds = 5 * 60, teamConfig = null) {
   // Apply team colours before any Player is constructed (they read C.COL_Y / C.RIM_Y etc.)
