@@ -60,10 +60,10 @@ export class Game {
     this._inRepoPhase = false;
 
     this._kickSound = new Audio('assets/kick.mp3');
-    this._kickSound.volume = 0.7;
+    this._kickSound.volume = 0.5;
     this._lastKickTime = 0;
     this._refereeSound = new Audio('assets/referee.mp3');
-    this._refereeSound.volume = 0.8;
+    this._refereeSound.volume = 0.95;
     this._goalSound = new Audio('assets/goal.mp3');
     this._goalSound.volume = 1.0;
 
@@ -117,6 +117,18 @@ export class Game {
     this._updateHUD();
     this._updateTimerHUD();
     this._updateScoreHUD();
+  }
+
+  // True while the next required action is a free reposition (e.g. ball
+  // just went out and the awarded team must place a player before the
+  // kick) — used by InputHandler to show the "move" cursor even before the
+  // player's mouse is exactly over a piece.
+  hasPendingReposition() {
+    if (!this.restartPending) return false;
+    if (this.multiplayer && this.multiplayer.isActive) {
+      return this.restartPending.team === this.multiplayer.myTeam;
+    }
+    return true;
   }
 
   // ── Rules interface consumed by InputHandler ──
@@ -283,11 +295,28 @@ export class Game {
     this.locked = false;
     this.shooter = null;
 
-    // Ball stopped in the small area, or in the big area after a keeper touch:
-    // the possession team may reposition one player before the next shot.
-    if (this._isBallInSmallArea() || (this._isBallInBigArea() && this.keeperTouchedBall)) {
-      this.restartPending = { team: this.possession, repositionsLeft: 1 };
-      this._updateHUD('Bola na área — reposicione um jogador para tocar a bola');
+    // Ball stopped in the small area: only the defending team (the team whose
+    // goal that small area belongs to), and only on its own turn, may freely
+    // reposition a player. The attacking team never gets this free move here
+    // — it just plays its turn normally.
+    if (this._isBallInSmallArea()) {
+      const defendingTeam = this._defendingTeamAt(this.ball.physBody.position.x);
+      if (this.possession === defendingTeam) {
+        this.restartPending = { team: this.possession, repositionsLeft: 1 };
+        this._updateHUD('Bola na área — reposicione um jogador para tocar a bola');
+      } else {
+        this._updateHUD();
+      }
+    } else if (this._isBallInBigArea() && this.keeperTouchedBall) {
+      // Big area after a keeper touch: same rule as the small area — only
+      // the defending team, on its own turn, gets the free reposition.
+      const defendingTeam = this._defendingTeamAt(this.ball.physBody.position.x);
+      if (this.possession === defendingTeam) {
+        this.restartPending = { team: this.possession, repositionsLeft: 1 };
+        this._updateHUD('Bola na área — reposicione um jogador para tocar a bola');
+      } else {
+        this._updateHUD();
+      }
     } else {
       this._updateHUD();
     }
@@ -506,6 +535,11 @@ export class Game {
     this.isDirectFromThrowIn = false;
     this.restartPending = null;
     this._updateHUD();
+  }
+
+  // yellow defends -HW, blue defends +HW (see InputHandler._clampKeeper / _onByline).
+  _defendingTeamAt(x) {
+    return x > 0 ? 'blue' : 'yellow';
   }
 
   _isBallInSmallArea() {

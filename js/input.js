@@ -127,10 +127,20 @@ export class InputHandler {
     this.raycaster.setFromCamera(this.mouse, camera);
     const hits = this.raycaster.intersectObjects(this.players.map(p => p.body));
     if (this.hovered) { this.hovered.setHighlight(false); this.hovered = null; }
+    let cursor = this.rules.hasPendingReposition ? (this.rules.hasPendingReposition() ? 'move' : 'default') : 'default';
     if (hits.length) {
       const obj = hits[0].object.userData.playerObj;
-      if (obj && this.rules.canDrag(obj)) { obj.setHighlight(true); this.hovered = obj; }
+      if (obj && this.rules.canDrag(obj)) {
+        obj.setHighlight(true);
+        this.hovered = obj;
+        cursor = this.rules.isReposition(obj) ? 'move' : 'grab';
+      }
     }
+    this._setCursor(cursor);
+  }
+
+  _setCursor(cursor) {
+    renderer.domElement.style.cursor = cursor;
   }
 
   _onDown(e) {
@@ -163,6 +173,7 @@ export class InputHandler {
     this.dragging = piece;
     this.dragMode = this.rules.isReposition(piece) ? 'reposition' : 'shot';
     this._dragIsRemoteKeeper = !!(mp && mp.isActive && !mp.isAuthority && isOwnFreeKeeper);
+    this._setCursor(this.dragMode === 'reposition' ? 'move' : 'grabbing');
 
     if (this.dragMode === 'shot') {
       this.anchor = new THREE.Vector3(piece.group.position.x, 0.07, piece.group.position.z);
@@ -274,6 +285,9 @@ export class InputHandler {
     const mode = this.dragMode;
     this.dragging = null;
     this.dragMode = null;
+    this._setCursor(this.hovered
+      ? (this.rules.isReposition(piece) ? 'move' : 'grab')
+      : (this.rules.hasPendingReposition && this.rules.hasPendingReposition() ? 'move' : 'default'));
 
     if (mode === 'reposition') {
       // Set back down: re-enable collisions with everyone and drop it back
