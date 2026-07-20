@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.local
+*.log
+.vscode
+.idea
+.DS_Store
+*.md
+test-*.js
+test-client-multiplayer.html
+__pycache__
+venv
+env
+*.py[cod]
