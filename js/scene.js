@@ -42,14 +42,25 @@ export let goalCamHalfH = 0, goalCamHalfV = 0;
 const viewChangeListeners = [];
 export function onViewChange(fn) { viewChangeListeners.push(fn); }
 
+// Heuristic for "weak" hardware: touch-primary device with few logical
+// cores. Not perfect (no reliable GPU-tier API in browsers), but enough to
+// back off pixel ratio, shadow resolution and AA on the phones/tablets most
+// likely to struggle, without penalizing desktop/laptop touchscreens.
+export const isMobile = typeof navigator !== 'undefined'
+  && (navigator.maxTouchPoints > 0)
+  && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+export const isLowEndDevice = isMobile && (navigator.hardwareConcurrency || 4) <= 4;
+
 export function initThree() {
   const wrap = document.getElementById('canvas-wrap');
   const W = wrap.clientWidth, H = wrap.clientHeight;
 
-  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const pixelRatioCap = isLowEndDevice ? 1.25 : (isMobile ? 1.5 : 2);
+
+  renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: !isLowEndDevice });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, pixelRatioCap));
   renderer.setSize(W, H);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !isLowEndDevice;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   scene = new THREE.Scene();
@@ -228,12 +239,17 @@ export function resetView() {
   refreshCamera();
 }
 
-export function initZoom() {
-  const applyZoom = (delta) => {
-    zoomFactor = Math.min(Math.max(zoomFactor + delta, ZOOM_MIN), ZOOM_MAX);
-    refreshCamera();
-  };
+export function applyZoom(delta) {
+  zoomFactor = Math.min(Math.max(zoomFactor + delta, ZOOM_MIN), ZOOM_MAX);
+  refreshCamera();
+}
 
+export function setZoom(value) {
+  zoomFactor = Math.min(Math.max(value, ZOOM_MIN), ZOOM_MAX);
+  refreshCamera();
+}
+
+export function initZoom() {
   // Mouse wheel
   window.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -243,6 +259,96 @@ export function initZoom() {
   document.getElementById('zoom-in-btn').addEventListener('click',   () => applyZoom(-ZOOM_STEP * 2));
   document.getElementById('zoom-out-btn').addEventListener('click',  () => applyZoom( ZOOM_STEP * 2));
   document.getElementById('reset-view-btn').addEventListener('click', resetView);
+}
+
+// ─────────────────────────────────────────────
+// TOUCH GESTURES  (pinch-to-zoom, 2-finger pan, double-tap reset)
+// ─────────────────────────────────────────────
+// True while 2+ fingers are down on the canvas. input.js checks this to
+// cancel/ignore single-finger piece dragging so pinch/pan and drag-a-piece
+// never fight over the same touch stream.
+export let multiTouchActive = false;
+const multiTouchListeners = [];
+export function onMultiTouchStart(fn) { multiTouchListeners.push(fn); }
+
+function _dist(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+function _mid(a, b) {
+  return { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+}
+
+export function initTouchGestures() {
+  const canvas = document.getElementById('canvas');
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+  let lastMid = null;
+  let lastTapTime = 0;
+
+  const onTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      multiTouchActive = true;
+      multiTouchListeners.forEach(fn => fn());
+      pinchStartDist = _dist(e.touches[0], e.touches[1]);
+      pinchStartZoom = zoomFactor;
+      lastMid = _mid(e.touches[0], e.touches[1]);
+    } else if (e.touches.length === 1) {
+      const now = performance.now();
+      if (now - lastTapTime < 300) {
+        e.preventDefault();
+        resetView();
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+      }
+    }
+  };
+
+  const onTouchMove = (e) => {
+    if (e.touches.length !== 2 || !multiTouchActive) return;
+    e.preventDefault();
+
+    // Pinch → zoom (fingers apart = zoom in / smaller zoomFactor).
+    const dist = _dist(e.touches[0], e.touches[1]);
+    if (pinchStartDist > 0) {
+      const ratio = pinchStartDist / dist;
+      setZoom(pinchStartZoom * ratio);
+    }
+
+    // 2-finger drag → pan, same world-units-per-pixel mapping as the
+    // desktop middle/right-mouse pan in initPan().
+    const mid = _mid(e.touches[0], e.touches[1]);
+    if (lastMid) panByPixels(mid.x - lastMid.x, mid.y - lastMid.y);
+    lastMid = mid;
+  };
+
+  const onTouchEnd = (e) => {
+    if (e.touches.length < 2) {
+      multiTouchActive = false;
+      lastMid = null;
+      pinchStartDist = 0;
+    }
+  };
+
+  canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+  canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
+  canvas.addEventListener('touchend',   onTouchEnd,   { passive: false });
+  canvas.addEventListener('touchcancel', onTouchEnd,  { passive: false });
+}
+
+// Shifts the pan offset by a screen-pixel delta, converting to world units
+// with the half-extents of whatever camera mode is active — shared by mouse
+// drag (initPan), 2-finger touch pan and single-finger touch pan (input.js).
+export function panByPixels(dxPx, dyPx) {
+  const wrap = document.getElementById('canvas-wrap');
+  const hH = camMode === 'overview' ? viewHalfX  : goalCamHalfH;
+  const hV = camMode === 'overview' ? viewHalfZ  : goalCamHalfV;
+  const wPerPxX = (hH * zoomFactor * 2) / wrap.clientWidth;
+  const wPerPxZ = (hV * zoomFactor * 2) / wrap.clientHeight;
+  panX -= dxPx * wPerPxX;
+  panZ -= dyPx * wPerPxZ;
+  refreshCamera();
 }
 
 export function initPan() {
@@ -264,18 +370,7 @@ export function initPan() {
     const dy = e.clientY - lastClientY;
     lastClientX = e.clientX;
     lastClientY = e.clientY;
-
-    const wrap = document.getElementById('canvas-wrap');
-    // Pick the base half-extents that match the active camera so the drag
-    // speed is always 1 world-unit-per-pixel regardless of mode.
-    const hH = camMode === 'overview' ? viewHalfX  : goalCamHalfH;
-    const hV = camMode === 'overview' ? viewHalfZ  : goalCamHalfV;
-    const wPerPxX = (hH * zoomFactor * 2) / wrap.clientWidth;
-    const wPerPxZ = (hV * zoomFactor * 2) / wrap.clientHeight;
-
-    panX -= dx * wPerPxX;
-    panZ -= dy * wPerPxZ;
-    refreshCamera();
+    panByPixels(dx, dy);
   };
 
   const onUp = () => {
@@ -297,9 +392,10 @@ function setupLights() {
 
   const sun = new THREE.DirectionalLight(0xfff8e1, 0.9);
   sun.position.set(60, 100, 40);
-  sun.castShadow = true;
+  sun.castShadow = !isLowEndDevice;
   Object.assign(sun.shadow.camera, { left:-120, right:120, top:80, bottom:-80, near:.5, far:400 });
-  sun.shadow.mapSize.set(2048, 2048);
+  const shadowRes = isLowEndDevice ? 512 : (isMobile ? 1024 : 2048);
+  sun.shadow.mapSize.set(shadowRes, shadowRes);
   sun.shadow.bias = -0.001;
   scene.add(sun);
 

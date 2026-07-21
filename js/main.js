@@ -1,5 +1,5 @@
 import { PHYS, Physics } from './physics.js';
-import { initThree, initCameraButtons, initZoom, initPan, onViewChange, viewHalfX, viewHalfZ, scene, camera, renderer } from './scene.js';
+import { initThree, initCameraButtons, initZoom, initPan, initTouchGestures, onViewChange, viewHalfX, viewHalfZ, scene, camera, renderer } from './scene.js';
 import { Field } from './field.js';
 import { createTeams } from './formations.js';
 import { Ball } from './ball.js';
@@ -48,6 +48,7 @@ function init(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere', gameMode 
   initCameraButtons();
   initZoom();
   initPan();
+  initTouchGestures();
   physics = new Physics();
   // Showbol boards must be built before player/ball bodies so their masks include SHOWBOL_WALL
   if (gameMode === GAME_MODES.SHOWBOL) physics.buildShowbolWalls();
@@ -192,6 +193,7 @@ function initMultiplayer(ruleMode = RULE_MODES.FOUR_TOUCHES, ballType = 'sphere'
   initCameraButtons();
   initZoom();
   initPan();
+  initTouchGestures();
   physics = new Physics();
   if (gameMode === GAME_MODES.SHOWBOL) physics.buildShowbolWalls();
   field = new Field(physics, gameMode);

@@ -1,12 +1,27 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; user-select: none; }
+html, body {
+  background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; user-select: none;
+  overscroll-behavior: none; touch-action: none; height: 100%;
+}
 
 #hud {
   position: fixed; top: 0; left: 0; right: 0; height: 60px;
+  padding-top: env(safe-area-inset-top);
+  height: calc(60px + env(safe-area-inset-top));
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-bottom: 2px solid #0d3b66;
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; z-index: 10; color: white; gap: 12px;
+  padding-left: 24px; padding-right: 24px; z-index: 10; color: white; gap: 12px;
+}
+
+@media (max-width: 380px) {
+  #hud { height: calc(48px + env(safe-area-inset-top)); padding-left: 10px; padding-right: 10px; gap: 6px; }
+  .hud-block { min-width: 56px; }
+  .hud-lbl { font-size: 7px; }
+  .hud-val { font-size: 12px; }
+  #hud-score { font-size: 19px; gap: 5px; }
+  .tbadge { width: 20px; height: 20px; }
+  #poss-val { font-size: 12px; padding: 5px 8px; min-width: 90px; }
 }
 .hud-block { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
 .hud-lbl { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #777; margin-bottom: 2px; }
@@ -57,8 +72,14 @@ body { background: #0a0a0a; overflow: hidden; font-family: 'Segoe UI', Arial, sa
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-#canvas-wrap { position: fixed; top: 60px; left: 0; right: 0; bottom: 0; }
-canvas { display: block; }
+#canvas-wrap {
+  position: fixed; top: calc(60px + env(safe-area-inset-top)); left: 0; right: 0; bottom: 0;
+}
+canvas { display: block; touch-action: none; }
+
+@media (max-width: 380px) {
+  #canvas-wrap { top: calc(48px + env(safe-area-inset-top)); }
+}
 
 /* ── Pre-game menu ─────────────────────────────────── */
 #menu-overlay {
@@ -234,29 +255,40 @@ canvas { display: block; }
 #gflash.on { background: rgba(255,215,0,.35); }
 
 #cam-btns {
-  position: fixed; right: 16px; bottom: 16px; z-index: 20;
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 20;
   display: flex; flex-direction: column; gap: 4px;
 }
 #cam-btns button {
   background: rgba(20,20,30,.85); color: #fff; border: 1px solid #555;
   border-radius: 10px; padding: 9px 14px; font-size: 13px; font-weight: bold;
   cursor: pointer; transition: transform .1s, background .15s;
-  white-space: nowrap;
+  white-space: nowrap; min-height: 44px;
 }
 #cam-btns button:hover { background: rgba(40,40,60,.95); transform: scale(1.04); }
 #cam-btns button.cam-active { border-color: #FFD700; background: rgba(255,215,0,.15); }
 
 #zoom-btns {
-  position: fixed; right: 16px; bottom: 158px; z-index: 20;
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right));
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  z-index: 20;
   display: flex; flex-direction: column; gap: 4px;
 }
 #zoom-btns button {
-  width: 36px; height: 36px;
+  width: 44px; height: 44px;
   background: rgba(20,20,30,.85); color: #fff; border: 1px solid #555;
   border-radius: 8px; font-size: 20px; font-weight: bold; line-height: 1;
   cursor: pointer; transition: transform .1s, background .15s;
 }
 #zoom-btns button:hover { background: rgba(40,40,60,.95); transform: scale(1.08); }
+
+@media (max-width: 380px) {
+  #cam-btns button { padding: 8px 10px; font-size: 11px; }
+  #zoom-btns { bottom: calc(140px + env(safe-area-inset-bottom)); }
+}
 
 /* ── Multiplayer UI ─────────────────────────────────── */
 .menu-overlay-active {
@@ -311,3 +343,31 @@ canvas { display: block; }
 }
 
 .hidden { display: none !important; }
+
+/* ── Responsive: narrow screens (phones) ─────────────── */
+@media (max-width: 640px) {
+  .menu-box { padding: 20px 16px 18px; border-radius: 14px; }
+  .menu-title { font-size: 16px; letter-spacing: 3px; }
+
+  .menu-vs-section { flex-direction: column; min-height: 0; }
+  .menu-vs-divider {
+    flex-direction: row; width: auto; padding: 6px 0;
+    border-left: none; border-right: none;
+    border-top: 1px solid rgba(255,255,255,.05);
+    border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .vs-line { width: auto; height: 1px; flex: 1; background: linear-gradient(to right, transparent, rgba(255,215,0,.35), transparent); }
+  .menu-team-side { padding: 14px 8px; }
+  .team-badge-xl { width: 60px; height: 60px; margin-bottom: 8px; }
+  .team-name-xl { font-size: 15px; }
+
+  .setting-group { flex-wrap: wrap; }
+  .setting-lbl { min-width: 100%; }
+  .setting-tabs { flex-wrap: wrap; }
+  .stab { min-height: 44px; flex-basis: 30%; }
+
+  .team-nav-btn, .obtn, .menu-start-btn { min-height: 44px; }
+}
+
+/* Room-code input: keep it scrolled into view above the virtual keyboard */
+#room-code-input { font-size: 16px; }
