@@ -448,3 +448,37 @@ export class MultiplayerManager {
 }
 
 export const multiplayer = new MultiplayerManager();
+
+// ── App indo para background (troca de app / bloqueio de tela) ──
+// Socket.io já reconecta sozinho (reconnection: true no connect()); aqui só
+// avisamos o jogador com um toast, já que em mobile é comum minimizar o
+// navegador no meio de uma jogada e voltar sem entender por que travou.
+function _showBackgroundToast(msg) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const pill = document.createElement('div');
+  pill.className = 'toast-pill toast-warning';
+  pill.textContent = msg;
+  container.appendChild(pill);
+  setTimeout(() => pill.remove(), 3000);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!multiplayer.isActive) return;
+  if (document.hidden) {
+    console.log('[Multiplayer] App em segundo plano — aguardando volta...');
+  } else {
+    console.log('[Multiplayer] App voltou ao primeiro plano.');
+    if (!multiplayer.isConnected) {
+      _showBackgroundToast('🔌 Reconectando...');
+    }
+  }
+});
+
+// iOS Safari nem sempre dispara visibilitychange ao trocar de app; pagehide
+// é o sinal mais confiável ali.
+window.addEventListener('pagehide', () => {
+  if (multiplayer.isActive) {
+    console.log('[Multiplayer] Página suspensa (pagehide) durante partida ativa.');
+  }
+});

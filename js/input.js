@@ -1,4 +1,4 @@
-import { camera, renderer, scene } from './scene.js';
+import { camera, renderer, scene, multiTouchActive, onMultiTouchStart, panByPixels } from './scene.js';
 import { C } from './constants.js';
 import { GROUP } from './physics.js';
 
@@ -35,6 +35,10 @@ export class InputHandler {
     this._dragIsRemoteKeeper = false;
     this._lastKeeperSendTime = 0;
 
+    // Single-finger pan: active while a touch that didn't land on a
+    // draggable piece is dragging across empty field/board.
+    this._panTouch = null;
+
     this._buildForceLine();
     this._buildTrajectory();
 
@@ -42,9 +46,53 @@ export class InputHandler {
     dom.addEventListener('mousemove', e => this._onMove(e));
     dom.addEventListener('mousedown', e => this._onDown(e));
     window.addEventListener('mouseup', e => this._onUp(e));
-    dom.addEventListener('touchstart', e => { e.preventDefault(); this._onDown(this._touchToMouse(e)); }, { passive: false });
-    dom.addEventListener('touchmove',  e => { e.preventDefault(); this._onMove(this._touchToMouse(e)); }, { passive: false });
-    dom.addEventListener('touchend',   e => { e.preventDefault(); this._onUp(); }, { passive: false });
+    dom.addEventListener('touchstart', e => {
+      if (e.touches.length > 1) return;   // 2nd finger: scene.js owns pinch/pan
+      e.preventDefault();
+      const started = this._onDown(this._touchToMouse(e));
+      if (!started) {
+        const t = e.touches[0];
+        this._panTouch = { x: t.clientX, y: t.clientY };
+      }
+    }, { passive: false });
+    dom.addEventListener('touchmove', e => {
+      if (multiTouchActive || e.touches.length > 1) return;
+      e.preventDefault();
+      if (this._panTouch) {
+        const t = e.touches[0];
+        panByPixels(t.clientX - this._panTouch.x, t.clientY - this._panTouch.y);
+        this._panTouch.x = t.clientX;
+        this._panTouch.y = t.clientY;
+        return;
+      }
+      this._onMove(this._touchToMouse(e));
+    }, { passive: false });
+    dom.addEventListener('touchend', e => {
+      if (multiTouchActive) return;
+      e.preventDefault();
+      if (this._panTouch) { this._panTouch = null; return; }
+      this._onUp();
+    }, { passive: false });
+
+    // A second finger just landed mid-drag: abandon the drag with no shot
+    // fired (piece stays put) so it doesn't fight the pinch/pan gesture.
+    onMultiTouchStart(() => { this._cancelDrag(); this._panTouch = null; });
+  }
+
+  _cancelDrag() {
+    if (!this.dragging) return;
+    const piece = this.dragging;
+    if (this.dragMode === 'reposition') {
+      piece.physBody.collisionFilterMask = GROUP.PLAYER | GROUP.BALL;
+      piece.physBody.position.y = piece.restY;
+      piece.group.position.y = 0;
+    } else {
+      this.forceLine.visible = false;
+      this.trajDots.visible = false;
+    }
+    this.dragging = null;
+    this.dragMode = null;
+    this._setCursor('default');
   }
 
   _touchToMouse(e) {
@@ -190,6 +238,7 @@ export class InputHandler {
       piece.physBody.position.y = piece.restY + INPUT.DRAG_LIFT;
       piece.group.position.y = INPUT.DRAG_LIFT;
     }
+    return true;
   }
 
   _updateDrag(pt) {
