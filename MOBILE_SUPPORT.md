@@ -19,7 +19,7 @@ Status: 🔲 não iniciado · 🟡 em andamento · ✅ concluído
 
 - ✅ **Pinch-to-zoom**: `initTouchGestures()` em `js/scene.js` detecta 2 dedos e ajusta `zoomFactor` pela distância entre eles
 - ✅ **Pan com 2 dedos**: mesmo handler move `panX/panZ` a partir do deslocamento do ponto médio entre os dois toques
-- ✅ **Pan com 1 dedo fora de qualquer peça**: `InputHandler._onDown` (`js/input.js`) agora retorna se iniciou um drag; se o toque não caiu sobre uma peça arrastável, o dedo passa a mover a câmera (`panByPixels`, exportado de `js/scene.js`) em vez de não fazer nada
+- ✅ Pan com 1 dedo fora de peça foi **removido de propósito** — mover o campo só acontece com 2 dedos (pinch/pan), 1 dedo passa direto se não tocar em nenhuma peça
 - ✅ Conflito resolvido: `multiTouchActive` (exportado de `scene.js`) é checado em `input.js` para ignorar/abortar o drag de peça assim que um 2º dedo toca a tela
 - ✅ `InputHandler` agora ignora `touchstart`/`touchmove` com mais de 1 toque ativo (evita drag acidental durante pinch/pan)
 - ✅ Double-tap (single-finger, <300ms) chama `resetView()` — mesmo efeito do botão "⌂"
