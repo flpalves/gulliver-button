@@ -14,14 +14,23 @@ html, body {
   padding-left: 24px; padding-right: 24px; z-index: 10; color: white; gap: 12px;
 }
 
+@media (max-width: 640px) {
+  #hud { height: calc(40px + env(safe-area-inset-top)); padding-left: 8px; padding-right: 8px; gap: 4px; }
+  .hud-block { min-width: 44px; }
+  .hud-lbl { font-size: 6px; margin-bottom: 0; }
+  .hud-val { font-size: 11px; }
+  #hud-score { font-size: 16px; gap: 4px; }
+  .tbadge { width: 16px; height: 16px; border-width: 1px; }
+  #poss-val { font-size: 10px; padding: 3px 6px; min-width: 66px; border-radius: 7px; }
+}
+
 @media (max-width: 380px) {
-  #hud { height: calc(48px + env(safe-area-inset-top)); padding-left: 10px; padding-right: 10px; gap: 6px; }
-  .hud-block { min-width: 56px; }
-  .hud-lbl { font-size: 7px; }
-  .hud-val { font-size: 12px; }
-  #hud-score { font-size: 19px; gap: 5px; }
-  .tbadge { width: 20px; height: 20px; }
-  #poss-val { font-size: 12px; padding: 5px 8px; min-width: 90px; }
+  #hud { height: calc(36px + env(safe-area-inset-top)); padding-left: 6px; padding-right: 6px; gap: 3px; }
+  .hud-block { min-width: 38px; }
+  .hud-val { font-size: 10px; }
+  #hud-score { font-size: 14px; gap: 3px; }
+  .tbadge { width: 14px; height: 14px; }
+  #poss-val { font-size: 9px; padding: 2px 5px; min-width: 56px; }
 }
 .hud-block { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
 .hud-lbl { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #777; margin-bottom: 2px; }
@@ -72,13 +81,27 @@ html, body {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@media (max-width: 640px) {
+  #toast-container { top: calc(46px + env(safe-area-inset-top)); }
+  .toast-pill { font-size: 11px; padding: 5px 10px; max-width: 190px; line-height: 1.25; border-radius: 16px; }
+  .toast-pill.toast-goal { font-size: 12px; }
+}
+@media (max-width: 380px) {
+  #toast-container { top: calc(40px + env(safe-area-inset-top)); }
+  .toast-pill { font-size: 10px; padding: 4px 8px; max-width: 160px; border-radius: 13px; }
+  .toast-pill.toast-goal { font-size: 11px; }
+}
+
 #canvas-wrap {
   position: fixed; top: calc(60px + env(safe-area-inset-top)); left: 0; right: 0; bottom: 0;
 }
 canvas { display: block; touch-action: none; }
 
+@media (max-width: 640px) {
+  #canvas-wrap { top: calc(40px + env(safe-area-inset-top)); }
+}
 @media (max-width: 380px) {
-  #canvas-wrap { top: calc(48px + env(safe-area-inset-top)); }
+  #canvas-wrap { top: calc(36px + env(safe-area-inset-top)); }
 }
 
 /* ── Pre-game menu ─────────────────────────────────── */
