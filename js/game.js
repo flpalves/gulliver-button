@@ -666,7 +666,7 @@ export class Game {
   _startTurnTimer() {
     if (!this.isPhysicsAuthority()) return;   // timers de turno só no dono da vez
     this._stopTurnTimer();
-    this._turnTimeLeft = 10;
+    this._turnTimeLeft = 15;
     this._updateTurnTimerDisplay();
     this._turnTimerInterval = setInterval(() => {
       this._turnTimeLeft--;
